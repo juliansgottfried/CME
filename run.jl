@@ -19,6 +19,7 @@ pmap(1:100) do i
     counts = zeros(Int, 100, 100 ^ 2)
     for j in 1:100
         for k in 1:100
+            println("i: $i, j: $j, k: $k")
             all = sim.replication(β[i], μ[j], p[k], Δt, G, J, inter)
             all[all .> 99] .= 99
             all .+= 1
