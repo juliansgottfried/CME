@@ -3,7 +3,7 @@
 using Distributed, SlurmClusterManager
 addprocs(SlurmManager())
 
-@everywhere include("sim.jl")
+@everywhere include("/scratch/users/jgottf/CME/sim.jl")
 @everywhere using JLD2, DelimitedFiles
 
 @everywhere β = 0:0.01:0.99
