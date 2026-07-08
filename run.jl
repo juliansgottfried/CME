@@ -25,5 +25,5 @@ pmap(1:100) do i
             [counts[l, 100 * (j - 1) + k] += 1 for l in all]
         end
     end
-    save_object("/scratch/users/jgottf/cme/results/counts_$i.csv", counts)
+    save_object("/scratch/users/jgottf/CME/JLresults/counts_$i.csv", counts)
 end
