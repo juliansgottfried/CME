@@ -1,0 +1,413 @@
+---
+title: "for_marc"
+author: "Julian Gottfried"
+date: "2026-06-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+setwd("~/Desktop/cme_marc/")
+```
+
+## Model
+
+A singular element "infecting" microbial hosts within a single human subject.
+
+$$
+\dot{S}=\mu_S-\beta S\frac{I}{N}-\mu_D S\\
+\dot{I}=\mu_I+\beta S\frac{I}{N}-\mu_D I
+$$
+
+## Parameters
+
+```{r}
+N0 <- 100 # initial host population size
+S0 <- 1 # naive hosts
+I0 <- 0 # infected hosts
+
+muS <- 5 # immigration into naive host pool
+muI <- 0.004 # immigration into infected host pool
+beta <- 0.04 # infection rate
+muD <- 0.05 # host death rate, shared between naive and infected populations
+
+singleresult <- singlerun(N, S0, I0, muS/muD, muI/muD, beta/muD, muD/muD, G, dt)
+plotsingle(singleresult, G)
+
+```
+
+## Hyperparameters
+
+```{r}
+G <- 25000 # number of generations
+dt <- 0.05 # time step
+J <- 100 # number of replicates
+```
+
+## Simulation code
+
+Discrete stochastic simulation. Transition kernels are $\text{Poisson}(\lambda*\text{d}t)$ for "births" and $\text{Binomial}(1-\exp(-\lambda*\text{d}t))$ for infection and death.
+
+```{r}
+singlerun <- function(N, S0, I0, muS, muI, beta, muD, G, dt) {
+    S <- rep(0, G)
+    I <- rep(0, G)
+    S[1] <- S0
+    I[1] <- I0
+    for (i in 2:G) {
+        N <- S[i - 1] + I[i - 1]
+        if (N == 0) break
+        muSI <- rbinom(1, S[i - 1], 1 - exp(-beta * I[i - 1] * dt / N))
+        S[i] <- floor(max(
+            S[i - 1] + rpois(1, muS * dt) - muSI - rbinom(1, S[i - 1], 1 - exp(-muD * dt)),
+            0))
+        I[i] <- floor(max(
+            I[i - 1] + rpois(1, muI * dt) + muSI - rbinom(1, I[i - 1], 1 - exp(-muD * dt)),
+            0))
+    }
+    c(S, I)
+}
+
+manyruns <- function(N, S0, I0, muS, muI, beta, muD, G, dt, J) {
+    store <- c()
+    for (j in 1:J) {
+        result <- singlerun(N, S0, I0, muS, muI, beta, muD, G, dt)
+        store <- c(store, result[(2 * G - 500):(2 * G)])
+    }
+    store
+}
+
+manystats <- function(N, S0, I0, muS, muI, beta, muD, G, dt, J) {
+    store <- matrix(0, J, 5)
+    colnames(store) <- c("p0", "non0avg", "non0med", "non0max", "ext")
+    for (j in 1:J) {
+        result <- singlerun(N, S0, I0, muS, muI, beta, muD, G, dt)[(2 * G - 500):(2 * G)]
+        p0 <- sum(result == 0) / 501
+        non0avg <- mean(result[result != 0])
+        non0med <- median(result[result != 0])
+        non0max <- max(result[result != 0])
+        ext <- sum((result[2:501] - result[1:500] != 0) & (result[2:501] == 0))
+        store[j, ] <- c(p0, non0avg, non0med, non0max, ext)
+    }
+    store
+}
+
+```
+
+## Plotting code
+
+```{r}
+plotsingle <- function(result, G) {
+    data.frame(time = c(1:G, 1:G), count = result, state = c(rep("S", G), rep("I", G))) %>%
+        mutate(state = factor(state, levels = c("S", "I"))) %>%
+        ggplot(aes(x = time, y = count)) +
+        geom_line() +
+        facet_wrap(~state) +
+        theme_classic()
+}
+
+plotmany <- function(result) {
+    data.frame(I = result) %>%
+        ggplot(aes(x = I)) +
+        geom_histogram(bins = 20, color = "white", fill = "black") +
+        xlim(NA, 20) +
+        theme_classic()
+}
+```
+
+## Run and plot
+
+```{r}
+singleresult <- singlerun(N, S0, I0, muS, muI, beta, muD, G, dt)
+plotsingle(singleresult, G)
+
+manyresult <- manyruns(N, S0, I0, muS, muI, beta, muD, G, dt, J)
+plotmany(manyresult)
+```
+
+## Sensitivity of distribution
+
+```{r}
+# parnames <- c("muS","muI","beta","muD")
+# pars <- data.frame(lhs::randomLHS(n, length(parnames)))
+
+# colnames(pars) <- parnames
+# pars <- pars %>% mutate(muS = muS * 25, 
+#                         muI = muI * 25, 
+#                         beta = beta * 25, 
+#                         muD = muD * 25)
+
+# pars <- data.frame(muS = rep(1:10, 1000),
+#            muI = rep(1:10, each = 1000),
+#            beta = rep(rep(1:10, each = 10), 100),
+#            muD = rep(rep(1:10, 10), each = 100))
+pars <- rbind(data.frame(muS = 5,
+                    muI = rep(seq(from = 0.2, to = 10, by = 0.2), 50),
+                    beta = 5,
+                    muD = rep(seq(from = 0.2, to = 10, by = 0.2), each = 50)),
+               data.frame(muS = rep(seq(from = 0.2, to = 10, by = 0.2), each = 50),
+                    muI = rep(seq(from = 0.2, to = 10, by = 0.2), 50),
+                    beta = 5,
+                    muD = 5),
+               data.frame(muS = seq(from = 0.2, to = 10, by = 0.2),
+                    muI = 5,
+                    beta = 5,
+                    muD = 5),
+               data.frame(muS = 5,
+                    muI = seq(from = 0.2, to = 10, by = 0.2),
+                    beta = 5,
+                    muD = 5),
+               data.frame(muS = 5,
+                    muI = 5,
+                    beta = seq(from = 0.2, to = 10, by = 0.2),
+                    muD = 5),
+               data.frame(muS = 5,
+                    muI = 5,
+                    beta = 5,
+                    muD = seq(from = 0.2, to = 10, by = 0.2)))
+parnames <- colnames(pars)
+
+all <- data.frame()
+for (i in 1:nrow(pars)) {
+    print(i)
+    tmppar <- pars[i, ]
+    result <- manystats(N0, 
+             N0 - 1,
+             1,
+             tmppar$muS,
+             tmppar$muI,
+             tmppar$beta,
+             tmppar$muD,
+             G, dt, J)
+    all <- rbind(all, cbind(result, tmppar))
+}
+write_csv(all, "permute4.csv")
+# all <- read_csv("permute3.csv")
+
+forplot <- all %>% 
+    group_by(muS, muI, beta, muD) %>% 
+    summarize(p0 = mean(p0),
+              non0avg = mean(non0avg),
+              non0med = mean(non0med),
+              non0max = mean(non0max),
+              ext = mean(ext)) %>% 
+    ungroup
+
+forplot %>% 
+    select(all_of(parnames), p0) %>% 
+    pivot_longer(cols = -p0, names_to = "var", values_to = "val") %>% 
+    ggplot(aes(x = val, y = log(p0))) +
+    geom_point(alpha = 0.5) + 
+    facet_wrap(~var, scales = "free_x", nrow = 1) +
+    theme_classic()
+forplot %>% 
+    select(all_of(parnames), non0avg) %>% 
+    pivot_longer(cols = -non0avg, names_to = "var", values_to = "val") %>% 
+    ggplot(aes(x = val, y = log(non0avg))) +
+    geom_point(alpha = 0.5) + 
+    facet_wrap(~var, scales = "free_x", nrow = 1) +
+    theme_classic()
+forplot %>% 
+    select(all_of(parnames), ext) %>% 
+    pivot_longer(cols = -ext, names_to = "var", values_to = "val") %>% 
+    ggplot(aes(x = val, y = log(ext))) +
+    geom_point(alpha = 0.5) + 
+    facet_wrap(~var, scales = "free_x", nrow = 1) +
+    theme_classic()
+
+forplot %>% 
+    filter(!is.nan(log(p0)) & !is.infinite(log(p0))) %>% 
+    select(muS, muI, muD, p0) %>% 
+    pivot_longer(c(muS, muD), names_to = "var", values_to = "val") %>% 
+    ggplot(aes(x = muI, y = val, color = log(p0))) +
+    geom_point(size = 3, alpha = 0.5) +
+    scale_color_viridis_c(option = 1) +
+    facet_wrap(~var, scales = "free_y") +
+    theme_classic()
+forplot %>% 
+    filter(!is.nan(log(p0)) & !is.infinite(log(p0))) %>% 
+    select(muS, muI, muD, p0) %>% 
+    pivot_longer(c(muS, muD), names_to = "var", values_to = "val") %>% 
+    ggplot(aes(x = muI, y = val, fill = log(p0))) +
+    geom_tile() +
+    coord_equal() +
+    scale_fill_viridis_c(option = 1) +
+    facet_wrap(~var) +
+    theme_classic()
+    
+forplot %>% 
+    filter(!is.nan(log(non0avg)) & !is.infinite(log(non0avg))) %>% 
+    select(muS, muI, muD, non0avg) %>% 
+    pivot_longer(c(muI, muD), names_to = "var", values_to = "val") %>% 
+    ggplot(aes(x = muS, y = val, color = log(non0avg))) +
+    geom_point(size = 3, alpha = 0.5) +
+    scale_color_viridis_c(option = 1) +
+    facet_wrap(~var, scales = "free_y") +
+    theme_classic()
+forplot %>% 
+    filter(!is.nan(log(non0avg)) & !is.infinite(log(non0avg))) %>% 
+    select(muS, muI, muD, non0avg) %>% 
+    pivot_longer(c(muS, muD), names_to = "var", values_to = "val") %>% 
+    ggplot(aes(x = muI, y = val, fill = (non0avg))) +
+    geom_tile() +
+    coord_equal() +
+    scale_fill_viridis_c(option = 1) +
+    facet_wrap(~var) +
+    theme_classic()
+
+forplot %>% 
+    filter(!is.nan(log(ext)) & !is.infinite(log(ext))) %>% 
+    select(muS, muI, muD, ext) %>% 
+    pivot_longer(c(muS, muD), names_to = "var", values_to = "val") %>% 
+    ggplot(aes(x = muI, y = val, color = log(ext))) +
+    geom_point(size = 3, alpha = 0.5) +
+    scale_color_viridis_c(option = 1) +
+    facet_wrap(~var, scales = "free_y") +
+    theme_classic()
+
+forplot %>% 
+    select(muS, muI, muD, beta, p0) %>% 
+    pivot_longer(c(muS, muD, beta), names_to = "var", values_to = "val") %>% 
+    ggplot(aes(x = muI, y = val, color = p0 == 0)) +
+    geom_point(size = 3, alpha = 0.5) +
+    scale_color_viridis_c(option = 1) +
+    facet_wrap(~var, scales = "free_y") +
+    theme_classic()
+forplot %>% 
+    select(muS, muI, muD, beta, non0avg) %>% 
+    pivot_longer(c(muS, muD, beta), names_to = "var", values_to = "val") %>% 
+    ggplot(aes(x = muI, y = val, color = is.nan(non0avg))) +
+    geom_point(size = 3, alpha = 0.5) +
+    scale_color_viridis_c(option = 1) +
+    facet_wrap(~var, scales = "free_y") +
+    theme_classic()
+```
+
+```{r}
+part1 <- all[1:250000, ]
+part2 <- all[250001:500000, ]
+part3 <- all[500001:505000, ]
+part4 <- all[505001:510000, ]
+part5 <- all[510001:515000, ]
+part6 <- all[515001:520000, ]
+
+singles <- rbind(part3 %>% select(val = muS, p0, non0avg) %>% mutate(par = "muS"),
+      part4 %>% select(val = muI, p0, non0avg) %>% mutate(par = "muI"),
+      part5 %>% select(val = beta, p0, non0avg) %>% mutate(par = "beta"),
+      part6 %>% select(val = muD, p0, non0avg) %>% mutate(par = "muD")) %>%
+    group_by(val, par) %>% 
+    summarize(p0mean=mean(p0, na.rm = T),
+              p0var=var(p0,na.rm=T), 
+              non0mean=mean(non0avg, na.rm = T),
+              non0var=var(non0avg,na.rm=T),) %>% 
+    ungroup
+
+singles %>% ggplot(aes(x=val, y=p0mean))+
+    geom_line()+
+    geom_ribbon(aes(ymin=p0mean-sqrt(p0var),
+                    ymax=p0mean+sqrt(p0var)), 
+                alpha=0.1)+
+    facet_wrap(~par)+
+    labs(x="value",y="proportion at 0")+
+    theme_classic()
+singles %>% ggplot(aes(x=val, y=non0mean))+
+    geom_line()+
+    geom_ribbon(aes(ymin=non0mean-sqrt(non0var),
+                    ymax=non0mean+sqrt(non0var)), 
+                alpha=0.1)+
+    facet_wrap(~par)+
+    labs(x="value",y="mean when non-zero")+
+    theme_classic()
+
+part1 %>%
+    ggplot(aes(x=muI, y=muD,fill=log(p0)))+
+    geom_tile()+
+    scale_fill_viridis_c(option=3, name = "log proportion at 0")+
+    coord_equal()+
+    theme_classic()
+part1 %>%
+    ggplot(aes(x=muI, y=muD,fill=(non0avg)))+
+    geom_tile()+
+    scale_fill_viridis_c(option=3,name="mean when\nnon-zero")+
+    coord_equal()+
+    theme_classic()
+
+part2 %>%
+    ggplot(aes(x=muI, y=muS,fill=log(p0)))+
+    geom_tile()+
+    scale_fill_viridis_c(option=3, name = "log proportion at 0")+
+    coord_equal()+
+    theme_classic()
+part2 %>%
+    ggplot(aes(x=muI, y=muS,fill=(non0avg)))+
+    geom_tile()+
+    scale_fill_viridis_c(option=3,name="mean when\nnon-zero")+
+    coord_equal()+
+    theme_classic()
+
+```
+
+```{r}
+cmetab <- read.table("eitan_data/cme_table.txt", header = T, sep = "\t")
+cmemat <- read.table("eitan_data/host_cme_matrix.txt", header = T, sep = "\t")
+hosts <- read.table("eitan_data/hosts.txt", header = T, sep = "\t")
+
+cmetab %>% ggplot(aes(x = segment_count, y = species_count)) +
+    geom_point() +
+    theme_classic()
+
+cmemat$subject <- str_split(cmemat$host_id, "_", simplify = T)[, 1]
+cmemat %>% 
+    select(-host_id) %>% 
+    pivot_longer(cols = -subject, names_to = "cme") %>% 
+    group_by(subject, cme) %>% 
+    summarize(count = sum(value)) %>%
+    filter(cme == "c100") %>% 
+    ggplot(aes(x = count)) +
+    geom_histogram() +
+    theme_classic()
+
+```
+
+```{r}
+rownames(hosts) <- hosts$host_id
+cmefams <- hosts[cmemat$host_id, ]$family
+
+n_by_fam <- hosts %>% group_by(family) %>% summarize(n = n())
+n_by_fam_vec <- n_by_fam$n
+names(n_by_fam_vec) <- n_by_fam$family
+
+nS <- apply(cmemat %>% select(-c(host_id, subject)),
+      2, \(x) sum(n_by_fam_vec[unique(cmefams[x])]))
+
+nI <- cmetab$species_count
+names(nI) <- cmetab$cseg
+
+nI <- nI[names(nS)]
+
+prop <- nI/nS
+
+range(prop)
+
+ggplot(data.frame(p = prop), aes(x = p))+
+    geom_histogram() +
+    theme_classic()
+
+
+data.frame(presence = cmemat$c7,
+           taxon = hosts[cmemat$host_id, ]$genus,
+           subject = cmemat$subject) %>% 
+    filter(presence) %>% 
+    distinct %>% 
+    group_by(taxon) %>% 
+    summarize(n = n() / 42) %>% 
+    ggplot(aes(x=n))+
+    geom_histogram()+
+    theme_classic()
+    
+
+```

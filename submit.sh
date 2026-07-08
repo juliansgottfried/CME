@@ -1,0 +1,13 @@
+ml julia
+
+sbatch \
+    --nodes=5 \
+    --ntasks-per-node=20 \
+    --mem=10G \
+    --time=02:00:00 \
+    --output=/scratch/users/jgottf/cme/output/%j.out \
+    --error=/scratch/users/jgottf/cme/output/%j.out \
+    --partition=normal,hns \
+    --mail-type=ALL \
+    --mail-user=juliansgottfried@gmail.com \
+    parallelprob.jl
