@@ -23,3 +23,22 @@ for i in 1:2
     end
     writedlm("JLresults/counts_$i.csv", counts, ',')
 end
+
+for i in 1:100
+    pars = zeros(Float64, 3, 100 ^ 2)
+    for j in 1:100
+        for k in 1:100
+            pars[:, 100 * (j - 1) + k] = [β[i], μ[j], p[k]]
+        end
+    end
+    writedlm("writepars/pars_$i.csv", pars, ',')
+end
+
+using Plots
+Ss = zeros(Int, G)
+Is = zeros(Int, G)
+Ss[1] = 100
+for g in 2:G
+    Ss[g], Is[g] = sim.iterate(0.73, 11, 0.0001, Ss[g - 1], Is[g - 1], Δt)
+end
+plot(Is)
