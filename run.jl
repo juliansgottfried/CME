@@ -15,7 +15,7 @@ addprocs(SlurmManager())
 @everywhere J = 400
 @everywhere inter = 500
 
-pmap(1:100) do i
+pmap([49; 52; collect(54:100)]) do i
     counts = zeros(Int, 100, 100 ^ 2)
     for j in 1:100
         for k in 1:100

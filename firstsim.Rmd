@@ -11,7 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r}
 library(tidyverse)
-setwd("~/Desktop/cme_marc/")
+setwd("~/Desktop/CME")
 ```
 
 ## Model
@@ -27,16 +27,19 @@ $$
 
 ```{r}
 N0 <- 100 # initial host population size
-S0 <- 1 # naive hosts
-I0 <- 0 # infected hosts
+S0 <- 10 # naive hosts
+I0 <- 1 # infected hosts
 
 muS <- 5 # immigration into naive host pool
-muI <- 0.004 # immigration into infected host pool
-beta <- 0.04 # infection rate
+muI <- 0 # immigration into infected host pool
+beta <- 2 # infection rate
 muD <- 0.05 # host death rate, shared between naive and infected populations
 
-singleresult <- singlerun(N, S0, I0, muS/muD, muI/muD, beta/muD, muD/muD, G, dt)
-plotsingle(singleresult, G)
+# singleresult <- singlerun(N, S0, I0, muS/muD, muI/muD, beta/muD, muD/muD, G, dt)
+# plotsingle(singleresult, G)
+
+manyresult <- manyruns(N, S0, I0, muS/muD, muI/muD, beta/muD, muD/muD, G, dt, J)
+plotmany(manyresult)
 
 ```
 

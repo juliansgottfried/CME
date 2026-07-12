@@ -103,7 +103,7 @@ pars[fits$idx, ] %>%
     annotate("text", x = -7, y = -1.8, label = "(0.0001, 0.11)", color = "white", family = "mono") + 
     annotate("text", x = -4.5, y = -0.8, label = "(0.052, 0.64)", color = "white", family = "mono") +
     annotate("text", x = -5.9, y = -4.2, label = "(0.015, 0.019)", color = "white", family = "mono") +
-    annotate("text", x = -2.54, y = -6.67, label = "labels untransformed", color = "white", family = "mono") + 
+    annotate("text", x = -2.54, y = -6.67, label = "labels untransformed", color = "grey", family = "mono") + 
     scale_fill_viridis_d(option = 14) +
     guides(fill="none") +
     ylab("log beta") + xlab("log muI") +
