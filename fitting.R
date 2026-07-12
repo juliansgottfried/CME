@@ -99,7 +99,7 @@ for (i in 1:length(cmes)) {
 }
 write_csv(fits, "fits2.csv")
 
-pars[fits$idx, ] %>% 
+ pars[fits$idx, ] %>% 
     mutate(muI = mu * p + 0.001, beta = beta + 0.001) %>%
     select(muI, beta) %>%
     ggplot(aes(x = muI, y = beta)) +
@@ -122,8 +122,8 @@ pars[fits$idx, ] %>%
     mutate(muI = mu * p, beta = beta) %>%
     select(muI, beta) %>%
     ggplot(aes(x = muI, y = beta)) +
-    geom_point() +
-    geom_jitter(width = 1/50, height = 3/50) +
+    geom_point(alpha = 0.2, size = 2) +
+    geom_jitter(width = 1/100, height = 3/100, alpha = 0.2, size = 2) +
     ylab("beta") + xlab("muI") +
     theme_classic() +
     ggtitle("parameter fits across CMEs") +
