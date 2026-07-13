@@ -6,9 +6,9 @@ addprocs(SlurmManager())
 @everywhere include("/scratch/users/jgottf/CME/sim.jl")
 @everywhere using JLD2, DelimitedFiles
 
-@everywhere β = 0:0.1:9.9
+@everywhere β = 0:0.02:1.98
 @everywhere μ = 0:10:990
-@everywhere p = 0:0.005:0.495
+@everywhere p = 0:0.01:0.99
 
 @everywhere Δt = 0.05
 @everywhere G = 25000
@@ -26,5 +26,5 @@ pmap(1:100) do i
             [counts[l, 100 * (j - 1) + k] += 1 for l in all]
         end
     end
-    writedlm("/scratch/users/jgottf/CME/JLresults3/counts_$i.csv", counts, ',')
+    writedlm("/scratch/users/jgottf/CME/JLresults4/counts_$i.csv", counts, ',')
 end

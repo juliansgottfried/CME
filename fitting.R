@@ -114,7 +114,6 @@ pars[fits$idx, ] %>%
 
 
 
-
 pars[fits$idx, ] %>% 
     filter(mu > 1 & p > 0.0001) %>% 
     mutate(muI = mu * p) %>%
