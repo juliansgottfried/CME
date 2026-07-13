@@ -97,7 +97,7 @@ write_csv(fits, "fits3.csv")
 
 pars[fits$idx, ] %>% 
     mutate(muI = mu * p, beta = beta) %>%
-    select(muI, beta) %>%
+    select(muI, beta, mu, p) %>%
     ggplot(aes(x = muI, y = beta)) +
     geom_point(alpha = 0.2, size = 2) +
     geom_jitter(width = 1/100, height = 3/100, alpha = 0.2, size = 2) +
@@ -111,7 +111,6 @@ pars[fits$idx, ] %>%
         axis.title.x=element_text(vjust=-1),
         legend.title=element_text(vjust=4),
         plot.margin=margin(r=15,t=15,l=15,b=15))
-
 
 
 pars[fits$idx, ] %>% 

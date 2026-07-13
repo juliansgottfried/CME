@@ -6,9 +6,9 @@ addprocs(SlurmManager())
 @everywhere include("/scratch/users/jgottf/CME/sim.jl")
 @everywhere using JLD2, DelimitedFiles
 
-@everywhere β = 0:0.02:1.98
-@everywhere μ = 0:10:990
-@everywhere p = 0:0.01:0.99
+@everywhere β = 0:0.05:4.95
+@everywhere μ = 0:1:99
+@everywhere p = 0:0.001:0.099
 
 @everywhere Δt = 0.05
 @everywhere G = 25000
