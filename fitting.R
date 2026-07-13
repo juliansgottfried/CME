@@ -34,19 +34,15 @@ plotsingle <- function(result, G) {
         theme_classic()
 }
 
-beta <- seq(from=0,by=0.01,to=0.99)
+beta <- seq(from=0,by=0.1,to=9.9)
 mu <- seq(from=0,by=10,to=990)
 p <- seq(from=0,by=0.005,to=0.495)
 
 counts <- NULL
 for (i in 1:100) {
     print(i)
-    replace_i = i
-    if (i == 68) replace_i = 67
-    countstmp <- data.frame(t(read.table(paste0("JLresults2/counts_",replace_i,".csv"), sep=",")))
-    # parstmp <- data.frame(t(read.table(paste0("writepars/pars_",i,".csv"), sep=",")))
-    
-    countstmp$beta <- beta[replace_i]
+    countstmp <- data.frame(t(read.table(paste0("JLresults3/counts_",i,".csv"), sep=",")))
+    countstmp$beta <- beta[i]
     countstmp$mu <- 0
     countstmp$p <- 0
     for (j in 1:100) {
@@ -58,8 +54,8 @@ for (i in 1:100) {
     }
     counts <- rbind(counts, countstmp)
 }
-write_csv(counts, "JLresults/aggregated2.csv")
-counts <- read_csv("JLresults/aggregated2.csv")
+write_csv(counts, "JLresults3/aggregated.csv")
+# counts <- read_csv("JLresults3/aggregated3.csv")
 
 # rowsums <- rowSums(counts %>% select(-c(beta, mu, p)))
 sum(rowSums(counts %>% select(-c(beta, mu, p))) != 20000)
@@ -97,26 +93,7 @@ for (i in 1:length(cmes)) {
     loglik <- apply(subset, 1, \(x) sum(log(x + pseudo) * tmpdat))
     fits[i, ] <- c(cmes[i], which.max(loglik), max(loglik, na.rm = T))
 }
-write_csv(fits, "fits2.csv")
-
- pars[fits$idx, ] %>% 
-    mutate(muI = mu * p + 0.001, beta = beta + 0.001) %>%
-    select(muI, beta) %>%
-    ggplot(aes(x = muI, y = beta)) +
-    geom_density_2d_filled() +
-    scale_y_continuous(trans = "log10") + scale_x_continuous(trans = "log10") +
-    scale_fill_viridis_d(option = 14) +
-    guides(fill="none") +
-    ylab("beta") + xlab("muI") +
-    theme_classic() +
-    ggtitle("parameter fits across CMEs") +
-    theme(
-        text=element_text(size=12,family="mono"),
-        axis.text.x=element_text(vjust=0),
-        axis.title.y=element_text(vjust=3),
-        axis.title.x=element_text(vjust=-1),
-        legend.title=element_text(vjust=4),
-        plot.margin=margin(r=15,t=15,l=15,b=15))
+write_csv(fits, "fits3.csv")
 
 pars[fits$idx, ] %>% 
     mutate(muI = mu * p, beta = beta) %>%
@@ -135,10 +112,8 @@ pars[fits$idx, ] %>%
         legend.title=element_text(vjust=4),
         plot.margin=margin(r=15,t=15,l=15,b=15))
 
-    # annotate("text", x = exp(-7), y = exp(-1.8), label = "(0.0001, 0.11)", color = "white", family = "mono") + 
-    # annotate("text", x = exp(-4.5), y = exp(-0.8), label = "(0.052, 0.64)", color = "white", family = "mono") +
-    # annotate("text", x = exp(-5.9), y = exp(-4.2), label = "(0.015, 0.019)", color = "white", family = "mono") +
-    # annotate("text", x = exp(-2.54), y = exp(-6.67), label = "labels untransformed", color = "grey", family = "mono")
+
+
 
 pars[fits$idx, ] %>% 
     filter(mu > 1 & p > 0.0001) %>% 
@@ -181,5 +156,3 @@ plotsingle(singlerun(50, 0,
                      testpars$mu, 
                      testpars$p,
                      25000, 0.05), 25000)
-
-pars[fits$idx, ]$mu %>% range
