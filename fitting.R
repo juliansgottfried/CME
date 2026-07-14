@@ -55,8 +55,7 @@ for (i in 1:100) {
     counts <- rbind(counts, countstmp)
 }
 write_csv(counts, "results4.csv")
-counts <- read_csv("results3.csv")
-counts$p %>% range
+counts <- read_csv("results4.csv")
 
 # rowsums <- rowSums(counts %>% select(-c(beta, mu, p)))
 sum(rowSums(counts %>% select(-c(beta, mu, p))) != 20000)
