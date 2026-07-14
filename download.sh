@@ -1,3 +1,3 @@
 scp -r \
-	jgottf@login.sherlock.stanford.edu:/scratch/users/jgottf/CME/JLresults4/* \
-	JLresults4
+	jgottf@login.sherlock.stanford.edu:/scratch/users/jgottf/CME/JLresults5/* \
+	JLresults5

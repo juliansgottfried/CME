@@ -34,14 +34,14 @@ plotsingle <- function(result, G) {
         theme_classic()
 }
 
-beta <- seq(from=0,by=0.1,to=9.9)
-mu <- seq(from=0,by=10,to=990)
-p <- seq(from=0,by=0.005,to=0.495)
+beta <- seq(from=0,by=0.05,to=4.95)
+mu <- seq(from=0,by=1,to=99)
+p <- seq(from=0,by=0.001,to=0.099)
 
 counts <- NULL
 for (i in 1:100) {
     print(i)
-    countstmp <- data.frame(t(read.table(paste0("JLresults3/counts_",i,".csv"), sep=",")))
+    countstmp <- data.frame(t(read.table(paste0("JLresults4/counts_",i,".csv"), sep=",")))
     countstmp$beta <- beta[i]
     countstmp$mu <- 0
     countstmp$p <- 0
@@ -54,15 +54,16 @@ for (i in 1:100) {
     }
     counts <- rbind(counts, countstmp)
 }
-write_csv(counts, "JLresults3/aggregated.csv")
-# counts <- read_csv("JLresults3/aggregated3.csv")
+write_csv(counts, "results4.csv")
+counts <- read_csv("results3.csv")
+counts$p %>% range
 
 # rowsums <- rowSums(counts %>% select(-c(beta, mu, p)))
 sum(rowSums(counts %>% select(-c(beta, mu, p))) != 20000)
 rowsums <- 20000
 counts <- counts %>% mutate_at(paste0("X", 1:100), \(x) x / rowsums)
 
-counts[200, ] %>% 
+counts[10000, ] %>% 
     pivot_longer(starts_with("X"), names_to = "bin", values_to = "proportion") %>% 
     mutate(bin = as.numeric(str_remove(bin, "X")) - 1) %>%
     ggplot(aes(x = bin, y = proportion))+
@@ -93,15 +94,21 @@ for (i in 1:length(cmes)) {
     loglik <- apply(subset, 1, \(x) sum(log(x + pseudo) * tmpdat))
     fits[i, ] <- c(cmes[i], which.max(loglik), max(loglik, na.rm = T))
 }
-write_csv(fits, "fits3.csv")
+write_csv(fits, "fits4.csv")
+
+dbeta <- 0.05
+dmu <- 1
+dp <- 0.001
+dmuI <- 0.001
 
 pars[fits$idx, ] %>% 
-    mutate(muI = mu * p, beta = beta) %>%
+    mutate(muI = mu * p) %>%
     select(muI, beta, mu, p) %>%
     ggplot(aes(x = muI, y = beta)) +
     geom_point(alpha = 0.2, size = 2) +
-    geom_jitter(width = 1/100, height = 3/100, alpha = 0.2, size = 2) +
-    ylab("beta") + xlab("muI") +
+    geom_jitter(width = dmuI*1, height = dbeta*1, 
+                alpha = 0.2, size = 2) +
+    xlab("muI") + ylab("beta") +
     theme_classic() +
     ggtitle("parameter fits across CMEs") +
     theme(
@@ -112,25 +119,7 @@ pars[fits$idx, ] %>%
         legend.title=element_text(vjust=4),
         plot.margin=margin(r=15,t=15,l=15,b=15))
 
-
-pars[fits$idx, ] %>% 
-    filter(mu > 1 & p > 0.0001) %>% 
-    mutate(muI = mu * p) %>%
-    select(muI, beta) %>%
-    ggplot(aes(x = muI, y = beta)) +
-    geom_density_2d_filled() +
-    scale_fill_viridis_d(option = 2)+ 
-    guides(fill="none") +
-    ylim(0, 1) + xlim(0, 1) +
-    ylab("\u03B2") + xlab("Infected influx") +
-    theme_classic()
-pars[fits$idx, ] %>% 
-    filter((mu == 1 | p == 0.0001) & beta > 0) %>%
-    ggplot(aes(x = beta)) +
-    geom_density() +
-    xlim(0, 1) +
-    xlab("\u03B2") +
-    theme_classic()
+pars[fits$idx, ]$mu %>% range
 
 tester <- "c4"
 cmedat %>%
@@ -149,7 +138,7 @@ counts[fits$idx[fits$cme == tester], 1:21] %>%
     theme_classic()
 testpars <- pars[fits$idx[fits$cme == tester], ]
 testpars
-plotsingle(singlerun(50, 0,
+plotsingle(singlerun(100, 0,
                      testpars$beta,
                      testpars$mu, 
                      testpars$p,
