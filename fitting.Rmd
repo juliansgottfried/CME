@@ -1,6 +1,22 @@
+---
+title: "fitting"
+author: "Julian Gottfried"
+date: "2026-07-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Set-up
+```{r}
 library(tidyverse)
 setwd("~/Desktop/CME")
+```
 
+## Local sim functions
+```{r}
 birth <- function(pX, mu, dt) rpois(1, pX * mu * dt)
 death <- function(X, dt) rbinom(1, X, 1 - exp(-dt))
 FOI <- function(beta, S, I, dt) {
@@ -35,11 +51,17 @@ plotsingle <- function(result, G) {
         theme(text=element_text(size=12,family="mono"),
               legend.position = "bottom")
 }
+```
 
+## Grid parameters
+```{r}
 beta <- seq(from=0,by=0.05,to=4.95)
 mu <- seq(from=0,by=1,to=99)
 p <- seq(from=0,by=0.001,to=0.099)
+```
 
+## Aggregate cluster sims
+```{r}
 counts <- NULL
 for (i in 1:100) {
     print(i)
@@ -57,6 +79,10 @@ for (i in 1:100) {
     counts <- rbind(counts, countstmp)
 }
 write_csv(counts, "results4.csv")
+```
+
+## Convert counts
+```{r}
 counts <- read_csv("results4.csv")
 
 # rowsums <- rowSums(counts %>% select(-c(beta, mu, p)))
@@ -73,12 +99,15 @@ counts[10000, ] %>%
 
 finalbin <- counts %>% select(X21:X100) %>% rowSums
 counts <- counts %>% select(-c(X21:X100)) %>% add_column(.before = "beta", X21 = finalbin)
+```
 
+## Get CME data
+```{r}
 cmemat <- read.table("eitan_data/host_cme_matrix.txt", header = T, sep = "\t")
 cmes <- colnames(cmemat)[2:ncol(cmemat)]
 cmemat$subject <- str_split(cmemat$host_id, "_", simplify = T)[, 1]
 hostdat <-  read.table("eitan_data/hosts.txt", header = T, sep = "\t")
-cmemat <- left_join(cmemat, hostdat %>% select(species, host_id), by = "host_id")
+cmemat <- left_join(cmemat, hostdat %>% select(species, genus, family, host_id), by = "host_id")
 
 # cmedathost <- cmemat %>% 
 #     select(-c(host_id, species)) %>% 
@@ -95,7 +124,53 @@ cmedatsp <- cmemat %>%
     group_by(cme, subject) %>% 
     summarize(count = sum(value)) %>% 
     ungroup
+```
 
+## Estimate p
+```{r}
+# Method that doesn't work
+level = "family"
+estp <- rep(0, length(cmes))
+for (i in 1:length(cmes)) {
+    infecting <- cmemat[, level][cmemat[, cmes[i]]]
+    estp[i] <- length(unique(infecting)) / length(infecting)
+}
+ggplot(data.frame(estp),
+       aes(x = estp))+
+    geom_histogram(color = "white", fill = "black") +
+    theme_classic()
+
+# Method that may work
+coarse = "family"
+fine = "species"
+estp <- rep(0, length(cmes))
+for (i in 1:length(cmes)) {
+    infecting <- cmemat[, cmes[i]][cmemat[, fine] %in% 
+                hostdat[, fine][hostdat[, coarse] %in% 
+                                    unique(cmemat[, coarse][cmemat[, cmes[i]]])]]
+    estp[i] <- sum(infecting)/length(infecting)
+}
+ggplot(data.frame(estp),
+       aes(x = estp))+
+    geom_histogram(color = "white", fill = "black") +
+    theme_classic()
+
+# Snap to grid
+closestp <- round(p[estp%/%0.001 + 1], 3)
+ggplot(data.frame(closestp),
+       aes(closestp))+
+    geom_histogram(color = "white", fill = "black") +
+    xlim(NA, 0.1)+
+    xlab("f")+
+    theme_classic()+
+    theme(text=element_text(size=12,family="mono"),
+          legend.position = "bottom")
+```
+
+Find infectable taxa1. Then get proportion of taxa2 within taxa1 that are infected
+
+## Do fitting without prior p
+```{r}
 pseudo = 0.01
 pars <- counts %>% select(beta:p)
 fits <- data.frame(cme = cmes, idx = 0, loglik = -Inf)
@@ -108,22 +183,69 @@ for (i in 1:length(cmes)) {
     fits[i, ] <- c(cmes[i], which.max(loglik), max(loglik, na.rm = T))
 }
 write_csv(fits, "fits4sp.csv")
+```
 
+## Plot p fit
+```{r}
+fits <- read_csv("fits4sp.csv")
+ggplot(pars[fits$idx, ], aes(x=p))+
+    geom_histogram(color = "white", fill = "black")+
+    xlab("f")+
+    theme_classic()+
+    theme(text=element_text(size=12,family="mono"),
+          legend.position = "bottom")
+```
+
+## Do fitting with prior p
+```{r}
+pseudo = 0.01
+pars <- counts %>% select(beta:p)
+fits <- data.frame(cme = cmes, idx = 0, loglik = -Inf)
+for (i in 1:length(cmes)) {
+    print(i)
+    tmpdat <- cmedatsp %>% filter(cme == cmes[i]) %>% pull(count)
+    tmpdat <- table(tmpdat + 1)
+    idx <- (1:nrow(pars))[pars$p == closestp[i]]
+    subset <- counts[idx, as.numeric(names(tmpdat))]
+    loglik <- apply(subset, 1, \(x) sum(log(x + pseudo) * tmpdat))
+    fits[i, ] <- c(cmes[i], idx[which.max(loglik)], max(loglik, na.rm = T))
+}
+```
+
+## Plot parameter spread
+```{r}
 pars[fits$idx, ] %>% 
     group_by(beta, mu, p) %>% 
     summarize(count = n()) %>% 
     ungroup %>% 
     mutate(alphaI = mu * p, alphaS = mu * (1 - p)) %>%
-    rename(R0 = beta) %>% 
-    ggplot(aes(x = alphaS, y = alphaI)) +
+    rename(R0 = beta, alpha = mu) %>% 
+    ggplot(aes(x = alpha)) +
+    geom_histogram(color = "white", fill = "black")+
+    ggtitle("parameter fits across CMEs") +
+    theme_classic() +
+    theme(text=element_text(size=12,family="mono"),
+          legend.position = "bottom")
+pars[fits$idx, ] %>% 
+    group_by(beta, mu, p) %>% 
+    summarize(count = n()) %>% 
+    ungroup %>% 
+    mutate(alphaI = mu * p, alphaS = mu * (1 - p)) %>%
+    rename(R0 = beta, alpha = mu) %>% 
+    ggplot(aes(x = alpha, y = R0)) +
     geom_point(aes(size = count), stroke = 0.5, alpha = 1, shape = 1) +
     scale_size(range = c(0.5, 10)) +
     ggtitle("parameter fits across CMEs") +
     theme_classic() +
     theme(text=element_text(size=12,family="mono"),
           legend.position = "bottom")
+```
 
-fits$cme[with(pars[fits$idx, ], mu*(1-p) == max(mu*(1-p)))]
+## Plot particular CMEs
+```{r}
+fits$cme[with(pars[fits$idx, ], mu*p == max(mu*p))]
+fits$cme[with(pars[fits$idx, ], beta == max(beta))]
+fits$cme[with(pars[fits$idx, ], beta == 0 & p == min(p))]
 
 tester <- "c1048"
 cmedatsp %>%
@@ -157,7 +279,4 @@ plotsingle(singlerun(100, 0,
                      testpars$mu, 
                      testpars$p,
                      25000, 0.05), 25000)
-
-ggplot(pars[fits$idx, ], aes(x=p))+
-    geom_histogram(color = "white", fill = "black")+
-    theme_classic()
+```

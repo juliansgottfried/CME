@@ -412,5 +412,37 @@ data.frame(presence = cmemat$c7,
     geom_histogram()+
     theme_classic()
     
+```
+
+```{r}
+cmemat <- read.table("eitan_data/host_cme_matrix.txt", header = T, sep = "\t")
+cmes <- colnames(cmemat)[2:ncol(cmemat)]
+hostdat <-  read.table("eitan_data/hosts.txt", header = T, sep = "\t")
+cmemat <- left_join(cmemat, hostdat %>% select(species, genus, family, host_id), by = "host_id")
+
+level = "family"
+p <- rep(0, length(cmes))
+for (i in 1:length(cmes)) {
+    infecting <- cmemat[, level][cmemat[, cmes[i]]]
+    p[i] <- length(unique(infecting)) / length(infecting)
+}
+ggplot(data.frame(p),
+       aes(x = p))+
+    geom_histogram(color = "white", fill = "black") +
+    theme_classic()
+
+coarse = "family"
+fine = "species"
+p <- rep(0, length(cmes))
+for (i in 1:length(cmes)) {
+    infecting <- cmemat[, cmes[i]][cmemat[, fine] %in% 
+                hostdat[, fine][hostdat[, coarse] %in% 
+                                    unique(cmemat[, coarse][cmemat[, cmes[i]]])]]
+    p[i] <- sum(infecting)/length(infecting)
+}
+ggplot(data.frame(p),
+       aes(x = p))+
+    geom_histogram(color = "white", fill = "black") +
+    theme_classic()
 
 ```
