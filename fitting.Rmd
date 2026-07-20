@@ -17,26 +17,26 @@ setwd("~/Desktop/CME")
 
 ## Local sim functions
 ```{r}
-birth <- function(pX, mu, dt) rpois(1, pX * mu * dt)
+birth <- function(fX, alpha, dt) rpois(1, fX * alpha * dt)
 death <- function(X, dt) rbinom(1, X, 1 - exp(-dt))
-FOI <- function(beta, S, I, dt) {
+FOI <- function(R0, S, I, dt) {
     if (S == 0 && I == 0) return(0)
-    rbinom(1, S, 1 - exp(-beta * I / (S + I) * dt))
+    rbinom(1, S, 1 - exp(-R0 * I / (S + I) * dt))
 }
 
-singlerun <- function(S0, I0, beta, mu, p, G, dt) {
+singlerun <- function(S0, I0, R0, alpha, f, G, dt) {
     S <- rep(0, G)
     I <- rep(0, G)
     S[1] <- S0
     I[1] <- I0
     for (i in 2:G) {
-        muSI <- FOI(beta, S[i - 1], I[i - 1], dt)
+        muSI <- FOI(R0, S[i - 1], I[i - 1], dt)
         
         S[i] <- S[i - 1] - muSI
         I[i] <- I[i - 1] + muSI
         
-        S[i] <- S[i] + birth(1 - p, mu, dt) - death(S[i], dt)
-        I[i] <- I[i] + birth(p, mu, dt) - death(I[i], dt)
+        S[i] <- S[i] + birth(1 - f, alpha, dt) - death(S[i], dt)
+        I[i] <- I[i] + birth(f, alpha, dt) - death(I[i], dt)
     }
     c(S, I)
 }
@@ -126,6 +126,15 @@ cmedatsp <- cmemat %>%
     ungroup
 ```
 
+## Extraneous
+```{r}
+for (i in 1:length(cmes)) {
+    cmemat[cmemat[, cmes[i]], c("subject", "species")] %>% 
+        group_by(subject) %>% summarize(n = n()) %>% 
+        pull(n) %>% mean
+}
+```
+
 ## Estimate p
 ```{r}
 # Method that doesn't work
@@ -167,8 +176,6 @@ ggplot(data.frame(closestp),
           legend.position = "bottom")
 ```
 
-Find infectable taxa1. Then get proportion of taxa2 within taxa1 that are infected
-
 ## Do fitting without prior p
 ```{r}
 pseudo = 0.01
@@ -194,6 +201,23 @@ ggplot(pars[fits$idx, ], aes(x=p))+
     theme_classic()+
     theme(text=element_text(size=12,family="mono"),
           legend.position = "bottom")
+
+ordering <- order(closestp, decreasing = T)
+data.frame(x = 1:length(cmes), 
+           priorp = closestp[ordering],
+           estp = pars[fits$idx, ]$p[ordering]) %>% 
+    pivot_longer(priorp:estp) %>% 
+    ggplot(aes(x = x, y = value, color = name)) +
+    scale_color_discrete(palette = c("#E0AB60", "#7DA2C9"), 
+                         labels = c("estimated","calculated"),
+                         name = "") +
+    geom_point() +
+    ylab("f") +
+    xlab("CME") +
+    theme_classic() +
+    theme(text=element_text(size=12,family="mono"),
+          legend.position = "bottom")
+
 ```
 
 ## Do fitting with prior p
@@ -220,7 +244,7 @@ pars[fits$idx, ] %>%
     ungroup %>% 
     mutate(alphaI = mu * p, alphaS = mu * (1 - p)) %>%
     rename(R0 = beta, alpha = mu) %>% 
-    ggplot(aes(x = alpha)) +
+    ggplot(aes(x = R0)) +
     geom_histogram(color = "white", fill = "black")+
     ggtitle("parameter fits across CMEs") +
     theme_classic() +
@@ -239,15 +263,20 @@ pars[fits$idx, ] %>%
     theme_classic() +
     theme(text=element_text(size=12,family="mono"),
           legend.position = "bottom")
+
+sum(pars[fits$idx, ]$mu != 0 & pars[fits$idx, ]$beta != 0)/nrow(fits)
+sum(pars[fits$idx, ]$mu == 0 & pars[fits$idx, ]$beta != 0)/nrow(fits)
+sum(pars[fits$idx, ]$mu != 0 & pars[fits$idx, ]$beta == 0)/nrow(fits)
+sum(pars[fits$idx, ]$mu == 0 & pars[fits$idx, ]$beta == 0)/nrow(fits)
+
 ```
 
 ## Plot particular CMEs
 ```{r}
-fits$cme[with(pars[fits$idx, ], mu*p == max(mu*p))]
 fits$cme[with(pars[fits$idx, ], beta == max(beta))]
-fits$cme[with(pars[fits$idx, ], beta == 0 & p == min(p))]
+fits$cme[with(pars[fits$idx, ], mu == 0 & beta != 0)]
 
-tester <- "c1048"
+tester <- "c4"
 cmedatsp %>%
     filter(cme == tester) %>% 
     pull(count) %>% 
@@ -280,3 +309,11 @@ plotsingle(singlerun(100, 0,
                      testpars$p,
                      25000, 0.05), 25000)
 ```
+
+```{r}
+alpha <- 0.1
+i <- (0:21)
+plot(alpha^i / (exp(alpha) * factorial(i)))
+
+```
+
