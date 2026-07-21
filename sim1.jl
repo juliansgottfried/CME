@@ -1,4 +1,4 @@
-module sim
+module sim1
 
 using Distributions
 
