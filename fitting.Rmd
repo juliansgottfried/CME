@@ -17,44 +17,6 @@ setwd("~/Desktop/CME")
 
 ## Local sim functions
 ```{r}
-birth <- function(fX, alpha, dt) rpois(1, fX * alpha * dt)
-death <- function(X, dt) rbinom(1, X, 1 - exp(-dt))
-FOI <- function(R0, S, I, dt) {
-    if (S == 0 && I == 0) return(0)
-    rbinom(1, S, 1 - exp(-R0 * I / (S + I) * dt))
-}
-
-singlerun <- function(S0, I0, R0, alpha, f, G, dt) {
-    S <- rep(0, G)
-    I <- rep(0, G)
-    S[1] <- S0
-    I[1] <- I0
-    for (i in 2:G) {
-        muSI <- FOI(R0, S[i - 1], I[i - 1], dt)
-        
-        S[i] <- S[i - 1] - muSI
-        I[i] <- I[i - 1] + muSI
-        
-        S[i] <- S[i] + birth(1 - f, alpha, dt) - death(S[i], dt)
-        I[i] <- I[i] + birth(f, alpha, dt) - death(I[i], dt)
-    }
-    c(S, I)
-}
-
-plotsingle <- function(result, G) {
-    data.frame(time = c(1:G, 1:G), size = result, state = c(rep("S", G), rep("I", G))) %>%
-        mutate(state = factor(state, levels = c("S", "I"))) %>%
-        ggplot(aes(x = time, y = size)) +
-        geom_line() +
-        facet_wrap(~state) +
-        theme_classic() +
-        theme(text=element_text(size=12,family="mono"),
-              legend.position = "bottom")
-}
-```
-
-## Alternative local sim
-```{r}
 singlerun <- function(alpha, f, R0, G, S, I) {
     Ss <- rep(0, G)
     Is <- rep(0, G)
@@ -66,7 +28,8 @@ singlerun <- function(alpha, f, R0, G, S, I) {
             Is[t + 1] <- I
             t <- t + 1
         }
-        foi <- R0 * S * I / (S + I)
+        if (S + I == 0) { foi = 0
+        } else {foi <- R0 * S * I / (S + I)}
         rate <- alpha + foi + S + I
         g <- g - 1 / rate * log(1 - runif(1))
         pick <- runif(1)
@@ -81,21 +44,23 @@ singlerun <- function(alpha, f, R0, G, S, I) {
     c(Ss, Is)
 }
 
-alpha <- 20
-f <- 0.005
-R0 <- 1
-G <- 7000
-S0 <- 100
-I0 <- 0
-
-plotsingle(singlerun(alpha, f, R0, G, S0, I0), G)+xlim(0,100)
+plotsingle <- function(result, G) {
+    data.frame(time = c(1:G, 1:G), size = result, state = c(rep("S", G), rep("I", G))) %>%
+        mutate(state = factor(state, levels = c("S", "I"))) %>%
+        ggplot(aes(x = time, y = size)) +
+        geom_line() +
+        facet_wrap(~state) +
+        theme_classic() +
+        theme(text=element_text(size=12,family="mono"),
+              legend.position = "bottom")
+}
 ```
 
 ## Grid parameters
 ```{r}
-beta <- seq(from=0,by=0.05,to=4.95)
-mu <- seq(from=0,by=1,to=99)
-p <- seq(from=0,by=0.001,to=0.099)
+alpha <- seq(from=0,by=1,to=99)
+f <- seq(from=0,by=0.005,to=0.495)
+R0 <- seq(from=0,by=0.1,to=9.9)
 ```
 
 ## Aggregate cluster sims
@@ -103,148 +68,209 @@ p <- seq(from=0,by=0.001,to=0.099)
 counts <- NULL
 for (i in 1:100) {
     print(i)
-    countstmp <- data.frame(t(read.table(paste0("JLresults4/counts_",i,".csv"), sep=",")))
-    countstmp$beta <- beta[i]
-    countstmp$mu <- 0
-    countstmp$p <- 0
+    countstmp <- data.frame(t(read.table(paste0("JLresults/counts_",i,".csv"), sep=",")))
+    countstmp$alpha <- alpha[i]
+    countstmp$f <- 0
+    countstmp$R0 <- 0
     for (j in 1:100) {
         for (k in 1:100) {
             idx <- 100 * (j - 1) + k
-            countstmp$mu[idx] <- mu[j]
-            countstmp$p[idx] <- p[k]
+            countstmp$f[idx] <- f[j]
+            countstmp$R0[idx] <- R0[k]
         }
     }
     counts <- rbind(counts, countstmp)
 }
-write_csv(counts, "results4.csv")
+write_csv(counts, "results5.csv")
 ```
 
 ## Convert counts
 ```{r}
-counts <- read_csv("results4.csv")
+freqs <- read_csv("results5.csv")
+pseudo <- 1
+freqs[, 1:O] <- freqs[, 1:O] + pseudo
+rowsums <- rowSums(freqs[, 1:O])
+freqs[, 1:O] <- freqs[, 1:O] %>% 
+    mutate_all(\(x) x / rowsums)
 
-# rowsums <- rowSums(counts %>% select(-c(beta, mu, p)))
-sum(rowSums(counts %>% select(-c(beta, mu, p))) != 20000)
-rowsums <- 20000
-counts <- counts %>% mutate_at(paste0("X", 1:100), \(x) x / rowsums)
+write_csv(freqs, "pars.csv", col_names = F)
 
-counts[10000, ] %>% 
+freqs[14000, ] %>% 
     pivot_longer(starts_with("X"), names_to = "bin", values_to = "proportion") %>% 
     mutate(bin = as.numeric(str_remove(bin, "X")) - 1) %>%
     ggplot(aes(x = bin, y = proportion))+
     geom_point()+
     theme_classic()
-
-finalbin <- counts %>% select(X21:X100) %>% rowSums
-counts <- counts %>% select(-c(X21:X100)) %>% add_column(.before = "beta", X21 = finalbin)
 ```
 
 ## Get CME data
 ```{r}
+N <- 42
+O <- 50
+
 cmemat <- read.table("eitan_data/host_cme_matrix.txt", header = T, sep = "\t")
-cmes <- colnames(cmemat)[2:ncol(cmemat)]
+cmes <- colnames(cmemat %>% select(-host_id))
 cmemat$subject <- str_split(cmemat$host_id, "_", simplify = T)[, 1]
 hostdat <-  read.table("eitan_data/hosts.txt", header = T, sep = "\t")
 cmemat <- left_join(cmemat, hostdat %>% select(species, genus, family, host_id), by = "host_id")
 
-# cmedathost <- cmemat %>% 
-#     select(-c(host_id, species)) %>% 
-#     pivot_longer(cols = -subject, names_to = "cme") %>% 
-#     group_by(cme, subject) %>% 
-#     summarize(count = sum(value)) %>% 
-#     ungroup
-cmedatsp <- cmemat %>% 
+cmedat <- cmemat %>% 
     group_by(subject, species) %>% 
     summarize_at(cmes, \(x) sum(x) != 0) %>% 
-    ungroup %>% 
     select(-species) %>% 
     pivot_longer(cols = -subject, names_to = "cme") %>% 
     group_by(cme, subject) %>% 
-    summarize(count = sum(value)) %>% 
-    ungroup
+    summarize(count = sum(value), .groups = "drop")
 ```
 
-## Extraneous
-```{r}
-for (i in 1:length(cmes)) {
-    cmemat[cmemat[, cmes[i]], c("subject", "species")] %>% 
-        group_by(subject) %>% summarize(n = n()) %>% 
-        pull(n) %>% mean
-}
-```
-
-## Estimate p
+## Pre-estimate f
 ```{r}
 # Method that doesn't work
-level = "family"
-estp <- rep(0, length(cmes))
+level = "genus"
+estf <- rep(0, length(cmes))
 for (i in 1:length(cmes)) {
     infecting <- cmemat[, level][cmemat[, cmes[i]]]
-    estp[i] <- length(unique(infecting)) / length(infecting)
+    estf[i] <- length(unique(infecting)) / length(infecting)
 }
-ggplot(data.frame(estp),
-       aes(x = estp))+
+ggplot(data.frame(estf),
+       aes(x = estf))+
     geom_histogram(color = "white", fill = "black") +
     theme_classic()
 
 # Method that may work
 coarse = "family"
 fine = "species"
-estp <- rep(0, length(cmes))
+estf <- rep(0, length(cmes))
 for (i in 1:length(cmes)) {
     infecting <- cmemat[, cmes[i]][cmemat[, fine] %in% 
                 hostdat[, fine][hostdat[, coarse] %in% 
                                     unique(cmemat[, coarse][cmemat[, cmes[i]]])]]
-    estp[i] <- sum(infecting)/length(infecting)
+    estf[i] <- sum(infecting)/length(infecting)
 }
-ggplot(data.frame(estp),
-       aes(x = estp))+
+ggplot(data.frame(estf),
+       aes(x = estf))+
     geom_histogram(color = "white", fill = "black") +
+    xlab("f")+
     theme_classic()
 
 # Snap to grid
-closestp <- round(p[estp%/%0.001 + 1], 3)
-ggplot(data.frame(closestp),
-       aes(closestp))+
+closestf <- round(f[estf%/%0.005 + 1], 3)
+ggplot(data.frame(closestf),
+       aes(closestf))+
     geom_histogram(color = "white", fill = "black") +
-    xlim(NA, 0.1)+
     xlab("f")+
     theme_classic()+
     theme(text=element_text(size=12,family="mono"),
           legend.position = "bottom")
 ```
 
-## Do fitting without prior p
+## Do fitting
 ```{r}
-pseudo = 0.01
-pars <- counts %>% select(beta:p)
+pars <- freqs %>% select(alpha:R0)
 fits <- data.frame(cme = cmes, idx = 0, loglik = -Inf)
 for (i in 1:length(cmes)) {
     print(i)
-    tmpdat <- cmedatsp %>% filter(cme == cmes[i]) %>% pull(count)
-    tmpdat <- table(tmpdat + 1)
-    subset <- counts[, as.numeric(names(tmpdat))]
-    loglik <- apply(subset, 1, \(x) sum(log(x + pseudo) * tmpdat))
-    fits[i, ] <- c(cmes[i], which.max(loglik), max(loglik, na.rm = T))
+    tmpdat <- cmedat %>% filter(cme == cmes[i]) %>% pull(count)
+    tmpdat <- as.numeric(unname(table(factor(tmpdat, levels = 0:(O-1)))))
+    factor <- log(factorial(N) / prod(factorial(tmpdat)))
+    loglik <- rowSums(sweep(log(freqs[, 1:O]), 2, tmpdat, FUN = "*"))
+    fits[i, 2:3] <- c(which.max(loglik), factor + max(loglik))
 }
-write_csv(fits, "fits4sp.csv")
+write_csv(fits, "fits5.csv")
+```
+
+## Do fitting, with bootstrapping
+```{r}
+J <- 100
+bootfits <- data.frame(cme = rep(cmes, each = J), 
+                       bootstrap = rep(1:J, times = length(cmes)), 
+                       idx = 0, 
+                       loglik = -Inf)
+for (i in (J+1):(2*J)) {
+    print(i)
+    tmpdat <- cmedat %>% 
+        filter(cme == cmes[i]) %>% 
+        pull(count) %>% 
+        sample(N, replace = T)
+    tmpdat <- as.numeric(unname(table(factor(tmpdat, levels = 0:(O-1)))))
+    factor <- log(factorial(N) / prod(factorial(tmpdat)))
+    loglik <- rowSums(sweep(log(freqs[, 1:O]), 2, tmpdat, FUN = "*"))
+    bootfits[i, 3:4] <- c(which.max(loglik), factor + max(loglik))
+}
+
+pars[bootfits[(J+1):(2*J), 3], ] %>% 
+    group_by(alpha, f, R0) %>%
+    summarize(count = n()) %>%
+    ungroup %>% 
+    mutate(alphaI = alpha * f, alphaS = alpha * (1 - f)) %>% 
+    ggplot(aes(x = R0, y = f)) +
+    geom_point(aes(size = count), stroke = 0.5, alpha = 1, shape = 1) +
+    scale_size(range = c(0.5, 10)) +
+    ggtitle("bootstrap density for c2") +
+    theme_classic() +
+    theme(text=element_text(size=12,family="mono"),
+          legend.position = "bottom")
+
+write_csv(bootfits, "fits5boot.csv")
+```
+
+## Do constrained fitting
+```{r}
+fits0 <- data.frame(cme = cmes, idx = 0, loglik = -Inf)
+for (i in 1:length(cmes)) {
+    print(i)
+    tmpdat <- cmedat %>% filter(cme == cmes[i]) %>% pull(count)
+    tmpdat <- as.numeric(unname(table(factor(tmpdat, levels = 0:(O-1)))))
+    factor <- log(factorial(N) / prod(factorial(tmpdat)))
+    loglik <- apply(freqs[freqs$R0 == 0, 1:O], 1, \(x) sum(tmpdat * log(x)))
+    fits0[i, ] <- c(cmes[i], which.max(loglik), factor + max(loglik))
+}
+```
+
+## Plot parameter spread
+```{r}
+explore <- pars[fits$idx, ] %>% mutate(cme = cmes)
+
+explore %>% 
+    group_by(alpha, f, R0) %>% 
+    summarize(count = n()) %>% 
+    ungroup %>% 
+    mutate(alphaI = alpha * f, alphaS = alpha * (1 - f)) %>%
+    pivot_longer(c(alphaS,alphaI,R0), names_to = "parameter") %>% 
+    mutate(parameter = factor(parameter, 
+                              levels = c("alphaS","alphaI","R0"))) %>% 
+    ggplot(aes(x = value)) +
+    geom_histogram(color = "white", fill = "black")+
+    ggtitle("parameter fits across CMEs") +
+    theme_classic() +
+    facet_wrap(~parameter, scale="free")+
+    theme(text=element_text(size=12,family="mono"),
+          legend.position = "bottom")
+
+explore %>% 
+    group_by(alpha, f, R0) %>%
+    summarize(count = n()) %>%
+    ungroup %>% 
+    mutate(alphaI = alpha * f, alphaS = alpha * (1 - f)) %>% 
+    ggplot(aes(x = alphaS, y = R0)) +
+    geom_point(aes(size = count), stroke = 0.5, alpha = 1, shape = 1) +
+    scale_size(range = c(0.5, 10)) +
+    ggtitle("parameter fits across CMEs") +
+    theme_classic() +
+    theme(text=element_text(size=12,family="mono"),
+          legend.position = "bottom")
+
+sum(explore$R0 != 0)
+sum(explore$R0 == 0)
 ```
 
 ## Plot p fit
 ```{r}
-fits <- read_csv("fits4sp.csv")
-ggplot(pars[fits$idx, ], aes(x=p))+
-    geom_histogram(color = "white", fill = "black")+
-    xlab("f")+
-    theme_classic()+
-    theme(text=element_text(size=12,family="mono"),
-          legend.position = "bottom")
-
-ordering <- order(closestp, decreasing = T)
+ordering <- order(explore$f, decreasing = T)
 data.frame(x = 1:length(cmes), 
-           priorp = closestp[ordering],
-           estp = pars[fits$idx, ]$p[ordering]) %>% 
-    pivot_longer(priorp:estp) %>% 
+           priorf = closestf[ordering],
+           estf = explore$f[ordering]) %>% 
+    pivot_longer(priorf:estf) %>% 
     ggplot(aes(x = x, y = value, color = name)) +
     scale_color_discrete(palette = c("#E0AB60", "#7DA2C9"), 
                          labels = c("estimated","calculated"),
@@ -258,100 +284,308 @@ data.frame(x = 1:length(cmes),
 
 ```
 
-## Do fitting with prior p
-```{r}
-pseudo = 0.01
-pars <- counts %>% select(beta:p)
-fits <- data.frame(cme = cmes, idx = 0, loglik = -Inf)
-for (i in 1:length(cmes)) {
-    print(i)
-    tmpdat <- cmedatsp %>% filter(cme == cmes[i]) %>% pull(count)
-    tmpdat <- table(tmpdat + 1)
-    idx <- (1:nrow(pars))[pars$p == closestp[i]]
-    subset <- counts[idx, as.numeric(names(tmpdat))]
-    loglik <- apply(subset, 1, \(x) sum(log(x + pseudo) * tmpdat))
-    fits[i, ] <- c(cmes[i], idx[which.max(loglik)], max(loglik, na.rm = T))
-}
-```
-
-## Plot parameter spread
-```{r}
-pars[fits$idx, ] %>% 
-    group_by(beta, mu, p) %>% 
-    summarize(count = n()) %>% 
-    ungroup %>% 
-    mutate(alphaI = mu * p, alphaS = mu * (1 - p)) %>%
-    rename(R0 = beta, alpha = mu) %>% 
-    ggplot(aes(x = R0)) +
-    geom_histogram(color = "white", fill = "black")+
-    ggtitle("parameter fits across CMEs") +
-    theme_classic() +
-    theme(text=element_text(size=12,family="mono"),
-          legend.position = "bottom")
-pars[fits$idx, ] %>% 
-    group_by(beta, mu, p) %>% 
-    summarize(count = n()) %>% 
-    ungroup %>% 
-    mutate(alphaI = mu * p, alphaS = mu * (1 - p)) %>%
-    rename(R0 = beta, alpha = mu) %>% 
-    ggplot(aes(x = alpha, y = R0)) +
-    geom_point(aes(size = count), stroke = 0.5, alpha = 1, shape = 1) +
-    scale_size(range = c(0.5, 10)) +
-    ggtitle("parameter fits across CMEs") +
-    theme_classic() +
-    theme(text=element_text(size=12,family="mono"),
-          legend.position = "bottom")
-
-sum(pars[fits$idx, ]$mu != 0 & pars[fits$idx, ]$beta != 0)/nrow(fits)
-sum(pars[fits$idx, ]$mu == 0 & pars[fits$idx, ]$beta != 0)/nrow(fits)
-sum(pars[fits$idx, ]$mu != 0 & pars[fits$idx, ]$beta == 0)/nrow(fits)
-sum(pars[fits$idx, ]$mu == 0 & pars[fits$idx, ]$beta == 0)/nrow(fits)
-
-```
-
 ## Plot particular CMEs
 ```{r}
-fits$cme[with(pars[fits$idx, ], beta == max(beta))]
-fits$cme[with(pars[fits$idx, ], mu == 0 & beta != 0)]
+fits$cme[with(explore, R0 == max(R0))]
+fits$cme[with(explore, R0 == 0)]
+fits$cme[with(explore, alpha == max(alpha))]
+fits$cme[with(explore, alpha == min(alpha))]
 
 tester <- "c4"
-cmedatsp %>%
-    filter(cme == tester) %>% 
+cmedat %>%
+    filter(cme == tester) %>%
     pull(count) %>% 
+    factor(levels = 0:(O-1)) %>% 
     table %>% 
     data.frame %>% 
     rename(count = '.', freq = Freq) %>% 
-    mutate(count = as.numeric(count) - 1, freq = freq / sum(freq)) %>% 
+    mutate(count = as.numeric(count) - 1, 
+           freq = freq / sum(freq)) %>% 
     ggplot(aes(x=count, y=freq)) +
     geom_col(width = 1, color = "black", fill = "white")+
-    xlim(-1,22)+ylim(0,1)+
+    ylim(0,1)+xlim(-1,51)+
     theme_classic() +
     ggtitle(tester) +
     theme(text=element_text(size=12,family="mono"),
           legend.position = "bottom")
-counts[fits$idx[fits$cme == tester], 1:21] %>% 
-    pivot_longer(everything(), names_to = "count", values_to="freq") %>% 
-    mutate(count=as.numeric(str_remove(count,"X"))-1, freq = freq / sum(freq)) %>% 
+counts[fits$idx[fits$cme == tester], 1:O] %>% 
+    pivot_longer(everything(), 
+                 names_to = "count", 
+                 values_to="freq") %>% 
+    mutate(count=as.numeric(str_remove(count,"X"))-1, 
+           freq = freq / sum(freq)) %>% 
     ggplot(aes(x=count, y=freq)) +
     geom_col(width = 1, color = "black", fill = "white")+
-    xlim(-1,22)+ylim(0,1)+
+    ylim(0,1)+xlim(-1,51)+
     theme_classic() +
     ggtitle("best fit") +
     theme(text=element_text(size=12,family="mono"),
           legend.position = "bottom")
-testpars <- pars[fits$idx[fits$cme == tester], ]
-testpars
-plotsingle(singlerun(100, 0,
-                     testpars$beta,
-                     testpars$mu, 
-                     testpars$p,
-                     25000, 0.05), 25000)
+
+testpars <- explore[explore$cme == tester, ]
+plotsingle(singlerun(testpars$alpha,
+                     testpars$f, 
+                     testpars$R0,
+                     1000,
+                     25, 0), 1000)
 ```
 
+## Poisson goodness of fit
 ```{r}
-alpha <- 0.1
-i <- (0:21)
-plot(alpha^i / (exp(alpha) * factorial(i)))
+goodness <- rep(0, length(cmes))
+for (i in 1:length(cmes)) {
+    print(i)
+    tmpdat <- cmedat %>% filter(cme == cmes[i]) %>% pull(count)
+    lambda <- mean(tmpdat)
+    tmpdat <- as.numeric(unname(table(factor(tmpdat, levels = 0:(O-1)))))
+    expected <- N*dpois(0:(O-1),lambda)
+    stat <- sum((tmpdat-expected)^2 / expected)
+    df <- O - 2
+    goodness[i] <- pchisq(stat, df, lower.tail = F, log.p = T)
+}
 
+sum(exp(goodness)>0.01)
+
+data.frame(cme = cmes, pval = exp(goodness)) %>% 
+    arrange(-pval) %>%
+    mutate(idx = row_number()) %>% 
+    ggplot(aes(x=idx,y=pval))+
+    geom_point(alpha = 1, shape = 3)+
+    geom_hline(yintercept = 0.01, color="red", linetype=2)+
+    theme_classic()+
+    xlab("cme")+ylab("p-value")+
+    ggtitle("within-subject transmission") +
+    theme(text=element_text(size=12,family="mono"),
+          legend.position = "bottom")
 ```
 
+## Negative binomial error
+```{r}
+nsamp <- 10000
+sampling <- freqs[sample(1:nrow(freqs), nsamp), ]
+mse <- rep(0, nsamp)
+for (i in 1:nsamp) {
+    print(i)
+    tmpdat <- as.numeric(sampling[i, 1:50])
+    asint <- round(1000 * tmpdat, 0)
+    p = mean(asint) / var(asint)
+    r = mean(asint) * p / (1 - p)
+    probs <- dnbinom(0:(O-1),r,p) / sum(dnbinom(0:(O-1),r,p))
+    # dens[i] <- gtools::ddirichlet(tmpdat, probs)
+    mse[i] <- mean((probs - tmpdat)^2)
+}
+
+data.frame(mse = mse) %>% 
+    arrange(-mse) %>%
+    mutate(sim = row_number()) %>% 
+    ggplot(aes(x=sim,y=mse))+
+    geom_line()+
+    theme_classic()+
+    ylim(0,1)+
+    theme(text=element_text(size=12,family="mono"),
+          legend.position = "bottom")
+```
+
+## Negative binomial correspondence
+```{r}
+visit <- sample(1:nrow(pars), 10000)
+abut <- cbind(pars[visit, ], mu = 0, sigmasq = 0, r = 0, p = 0)
+for (i in 1:nrow(abut)) {
+    if (i %% 100 == 1) print(i)
+    tmpfreq <- as.numeric(freqs[visit, 1:50][i, ])
+    mu <- sum(tmpfreq * (0:49))
+    sigmasq <- sum(tmpfreq * (0:49) ^ 2) - mu ^ 2
+    p = min(max(mu / sigmasq, 0), 1)
+    r = max(floor(mu * p / (1 - p)), 0)
+    abut[i, 4:7] <- c(mu, sigmasq, r, p)
+}
+
+abut %>% 
+    filter(r < 50) %>% 
+    ggplot(aes(x = alpha, y = f, fill = p)) +
+    geom_tile() +
+    theme_classic()
+```
+
+## Negative binomial likelihood ratio test
+```{r}
+lrt <- rep(0, length(cmes))
+for (i in 1:length(cmes)) {
+    print(i)
+    tmpdat <- cmedat %>% filter(cme == cmes[i]) %>% pull(count)
+    lambda <- mean(tmpdat)
+    p = mean(tmpdat) / var(tmpdat)
+    r = mean(tmpdat) * p / (1 - p)
+    lr <- 2*abs(sum(dnbinom(tmpdat, r, p, log = T)) -
+            sum(dpois(tmpdat, lambda, log = T)))
+    df <- 1
+    lrt[i] <- pchisq(lr, df, lower.tail = F, log.p = T) - log(2)
+}
+
+data.frame(cme = cmes, pval = exp(lrt)) %>% 
+    arrange(-pval) %>%
+    mutate(idx = row_number()) %>% 
+    ggplot(aes(x=idx,y=pval))+
+    geom_point(alpha = 1, shape = 3)+
+    geom_hline(yintercept = 0.01, color="red", linetype=2)+
+    theme_classic()+
+    xlab("cme")+ylab("p-value")+
+    ggtitle("within-subject transmission via LRT") +
+    theme(text=element_text(size=12,family="mono"),
+          legend.position = "bottom")
+
+data.frame(cme = cmes, good = exp(goodness), lrt = exp(lrt)) %>% 
+    arrange(-good) %>%
+    mutate(idx = row_number()) %>% 
+    pivot_longer(good:lrt, names_to = "test", values_to = "pval") %>% 
+    ggplot(aes(x=idx,y=pval, color=test))+
+    geom_point(alpha = 0.5, shape = 3)+
+    scale_color_discrete(palette=c("#c4933f","#2aa7f5"),
+                         labels=c("goodness of fit", "LRT"),
+                         name = "test")+
+    geom_hline(yintercept = 0.01, color="red", linetype=2)+
+    theme_classic()+
+    xlab("cme")+ylab("p-value")+
+    ggtitle("within-subject transmission") +
+    theme(text=element_text(size=12,family="mono"),
+          legend.position = "bottom")
+```
+
+## Empirical likelihood ratio test
+```{r}
+emplrt <- rep(0, length(cmes))
+for (i in 1:length(cmes)) {
+    print(i)
+    tmpdat <- cmedat %>% filter(cme == cmes[i]) %>% pull(count)
+    lr <- 2*abs(as.numeric(fits[fits$cme == cmes[i], 3]) -
+                    as.numeric(fits0[fits0$cme == cmes[i], 3]))
+    df <- 1
+    emplrt[i] <- pchisq(lr, df, lower.tail = F, log.p = T) - log(2)
+}
+
+data.frame(cme = cmes, pval = exp(emplrt)) %>% 
+    arrange(-pval) %>%
+    mutate(idx = row_number()) %>% 
+    ggplot(aes(x=idx,y=pval))+
+    geom_point(alpha = 1, shape = 3)+
+    geom_hline(yintercept = 0.01, color="red", linetype=2)+
+    theme_classic()+
+    xlab("cme")+ylab("p-value")+
+    ggtitle("within-subject transmission via empirical LRT") +
+    theme(text=element_text(size=12,family="mono"),
+          legend.position = "bottom")
+
+data.frame(cme = cmes, good = exp(goodness), lrt = exp(emplrt)) %>% 
+    arrange(-good) %>%
+    mutate(idx = row_number()) %>% 
+    pivot_longer(good:lrt, names_to = "test", values_to = "pval") %>% 
+    ggplot(aes(x=idx,y=pval, color=test))+
+    geom_point(alpha = 0.5, shape = 3)+
+    scale_color_discrete(palette=c("#c4933f","#2aa7f5"),
+                         labels=c("goodness of fit", "empirical LRT"),
+                         name = "test")+
+    geom_hline(yintercept = 0.01, color="red", linetype=2)+
+    theme_classic()+
+    xlab("cme")+ylab("p-value")+
+    ggtitle("within-subject transmission") +
+    theme(text=element_text(size=12,family="mono"),
+          legend.position = "bottom")
+```
+
+## alpha correlations
+```{r}
+taxa = c("species","genus","family")
+prev <- matrix(0, length(cmes), 3, dimnames = list(NULL, taxa))
+for (i in 1:length(cmes)) {
+    infectable <- cmemat[, taxa][cmemat[, cmes[i]],]
+    prev[i, ] <- unlist(lapply(taxa, \(taxon)
+                               sum(table(hostdat[,taxon])[
+                                   unique(infectable[,taxon])]
+                                   ) / nrow(hostdat)))
+}
+
+explore %>% bind_cols(prev) %>% 
+    pivot_longer(species:family, 
+                 names_to="taxon", 
+                 values_to="prevalence") %>% 
+    ggplot(aes(x = prevalence, y = alpha))+
+    geom_point() +
+    theme_classic() +
+    facet_wrap(~taxon, scales = "free_x")+
+    xlab("prevalence of infectable taxa")+ylab("alpha")+
+    theme(text=element_text(size=12,family="mono"),
+          legend.position = "bottom")
+
+# taxon = c("family")
+# weighting <- matrix(0, 
+#                length(cmes), 
+#                length(unique(hostdat[, taxon])), 
+#                dimnames = list(NULL, unique(hostdat[, taxon])))
+# for (i in 1:length(cmes)) {
+#     infectable <- unique(cmemat[, taxon][cmemat[, cmes[i]]])
+#     tmpfam <- table(hostdat[, taxon])[infectable]
+#     tmpfam <- tmpfam / sum(tmpfam)
+#     weighting[i, names(tmpfam)] <- tmpfam * explore[i,]$R0
+# }
+# colSums(weighting)
+```
+
+## Matrix!
+```{r}
+ndim <- (O + 1) ^ 2
+
+states <- matrix(0, ndim, 2)
+k = 1
+for (i in 0:O) {
+    for (j in 0:O) {
+        states[k, ] = c(i, j)
+        k = k + 1
+    }
+}
+
+Q <- matrix(0, ndim, ndim)
+
+alpha1 = 25
+alpha2 = 0.5
+matR0 = 1
+
+for (i in 1:ndim) {
+    print(i)
+    for (j in 1:ndim) {
+        S = states[i, 1]
+        I = states[i, 2]
+        dS = states[j, 1] - S
+        dI = states[j, 2] - I
+        if (dS == 1 & dI == 0) {
+            Q[i, j] = alpha1
+        } else if (dS == 0 & dI == 1) {
+            Q[i, j] = alpha2
+        } else if (dS == -1 & dI == 0) {
+            Q[i, j] = S
+        } else if (dS == 0 & dI == -1) {
+            Q[i, j] = I
+        } else if (dS == -1 & dI == 1) {
+            Q[i, j] = matR0 * S * I / (S + I)
+        }
+    }
+}
+for (i in 1:ndim) {
+    Q[i, i] = -sum(Q[i, ])
+}
+
+pi <- pracma::nullspace(t(Q))
+pi <- round(pi / sum(pi), 5)[, 1]
+
+distribution <- data.frame(states) %>% 
+    rename(S = X1, I = X2) %>% 
+    mutate(pi = pi) %>% 
+    group_by(I) %>% 
+    summarize(pi = sum(pi))
+
+ggplot(distribution, aes(x = I, y = pi)) +
+    geom_point() + 
+    theme_classic() +
+    ylim(0, 1) +
+    theme(text = element_text(size = 12, family = "mono"),
+          legend.position = "bottom")
+```

@@ -1,4 +1,4 @@
-module sim2
+module sim
 
 function iterate(g, S, I, α, f, R0)
     FOI = R0 * S * I / (S + I)

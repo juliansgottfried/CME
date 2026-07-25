@@ -3,7 +3,7 @@
 using Distributed, SlurmClusterManager
 addprocs(SlurmManager())
 
-@everywhere include("/scratch/users/jgottf/CME/sim2.jl")
+@everywhere include("/scratch/users/jgottf/CME/sim.jl")
 @everywhere using JLD2, DelimitedFiles
 
 @everywhere α = 0:1:99
@@ -19,7 +19,7 @@ pmap(1:100) do i
     for j in 1:100
         for k in 1:100
             println("i: $i, j: $j, k: $k")
-            all = sim2.replication(J, G, inter, α[i], f[j], R0[k])
+            all = sim.replication(J, G, inter, α[i], f[j], R0[k])
             all[all .> 49] .= 49
             all .+= 1
             [counts[l, 100 * (j - 1) + k] += 1 for l in all]
