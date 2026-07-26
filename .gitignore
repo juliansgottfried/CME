@@ -1,9 +1,8 @@
-eitan*
-Rresults
-JLresults*
-output
 .DS_Store
-fits*
-results*
-pars.csv
+eitan*
+JLresults
 retrodiction
+output
+fits.csv
+results.csv
+pars.csv

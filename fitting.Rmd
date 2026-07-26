@@ -81,12 +81,12 @@ for (i in 1:100) {
     }
     counts <- rbind(counts, countstmp)
 }
-write_csv(counts, "results5.csv")
+write_csv(counts, "results.csv")
 ```
 
 ## Convert counts
 ```{r}
-freqs <- read_csv("results5.csv")
+freqs <- read_csv("results.csv")
 pseudo <- 1
 freqs[, 1:O] <- freqs[, 1:O] + pseudo
 rowsums <- rowSums(freqs[, 1:O])
