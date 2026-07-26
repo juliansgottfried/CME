@@ -13,8 +13,8 @@ addprocs(SlurmManager())
 @everywhere O = 50
 @everywhere M = 100
 @everywhere J = 1000
-@everywhere nthreads = 200
-@everywhere parsper =  5
+@everywhere nthreads = 100
+@everywhere parsper =  1
 @everywhere npars = 1000000
 
 @everywhere pars = readdlm("$path/pars.csv", ',', Float64, '\n')
