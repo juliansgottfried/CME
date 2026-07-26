@@ -18,11 +18,18 @@ addprocs(SlurmManager())
 @everywhere logpars = log.(pars)
 @everywhere logpars0 = logpars[pars[:, O + 3] .== 0, :]
 
-@everywhere idx = Distributions.sample(1:npars, nthreads * parsper, replace = false)
+@everywhere bool0 = pars[:, O + 3] .== 0
+@everywhere idx0 = Distributions.sample((1:npars)[bool0], 
+    floor(Int, nthreads * parsper / 2), 
+    replace = false)
+@everywhere idxnon0 = Distributions.sample((1:npars)[.!bool0], 
+    ceil(Int, nthreads * parsper / 2), 
+    replace = false)
+@everywhere idx = [idx0; idxnon0]
 @everywhere selected = pars[idx, :]
-@everywhere writedlm("/scratch/users/jgottf/CME/retrodiction/selected.csv", selected[:, (O + 1):(O + 3)], ',')
+@everywhere writedlm("/scratch/users/jgottf/CME/retrodiction/selected.csv", [idx selected[:, (O + 1):(O + 3)]], ',')
 
-pmap(1:nthreads) do i
+@everywhere body = function(i, N, O, M, J, parsper, logpars, logpars0, selected)
     for j in 1:parsper
         k = parsper * (i - 1) + j
         tmpdistr = convert(Array{Float64, 1}, selected[k, 1:O])
@@ -47,4 +54,8 @@ pmap(1:nthreads) do i
         end
         writedlm("/scratch/users/jgottf/CME/retrodiction/dat_$(k).csv", tmpdata, ',')
     end
+end
+
+pmap(1:nthreads) do i
+    body(i, N, O, M, J, parsper, logpars, logpars0, selected)
 end
