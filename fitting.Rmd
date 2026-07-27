@@ -61,6 +61,9 @@ plotsingle <- function(result, G) {
 alpha <- seq(from=0,by=1,to=99)
 f <- seq(from=0,by=0.005,to=0.495)
 R0 <- seq(from=0,by=0.1,to=9.9)
+
+N <- 42
+O <- 50
 ```
 
 ## Aggregate cluster sims
@@ -86,14 +89,16 @@ write_csv(counts, "results.csv")
 
 ## Convert counts
 ```{r}
-freqs <- read_csv("results.csv")
+counts <- read_csv("results.csv")
+freqs <- counts
 pseudo <- 1
 freqs[, 1:O] <- freqs[, 1:O] + pseudo
 rowsums <- rowSums(freqs[, 1:O])
 freqs[, 1:O] <- freqs[, 1:O] %>% 
     mutate_all(\(x) x / rowsums)
 
-write_csv(freqs, "pars.csv", col_names = F)
+write_csv(freqs, "pars.csv", col_names = T)
+freqs <- read_csv("pars.csv", col_names = T)
 
 freqs[14000, ] %>% 
     pivot_longer(starts_with("X"), names_to = "bin", values_to = "proportion") %>% 
@@ -105,19 +110,17 @@ freqs[14000, ] %>%
 
 ## Get CME data
 ```{r}
-N <- 42
-O <- 50
-
 cmemat <- read.table("eitan_data/host_cme_matrix.txt", header = T, sep = "\t")
 cmes <- colnames(cmemat %>% select(-host_id))
 cmemat$subject <- str_split(cmemat$host_id, "_", simplify = T)[, 1]
+cmemat$genome <- str_split(cmemat$host_id, "_", simplify = T)[, 2]
 hostdat <-  read.table("eitan_data/hosts.txt", header = T, sep = "\t")
 cmemat <- left_join(cmemat, hostdat %>% select(species, genus, family, host_id), by = "host_id")
 
 cmedat <- cmemat %>% 
-    group_by(subject, species) %>% 
+    group_by(subject, genome) %>% 
     summarize_at(cmes, \(x) sum(x) != 0) %>% 
-    select(-species) %>% 
+    select(-genome) %>% 
     pivot_longer(cols = -subject, names_to = "cme") %>% 
     group_by(cme, subject) %>% 
     summarize(count = sum(value), .groups = "drop")
@@ -176,42 +179,8 @@ for (i in 1:length(cmes)) {
     loglik <- rowSums(sweep(log(freqs[, 1:O]), 2, tmpdat, FUN = "*"))
     fits[i, 2:3] <- c(which.max(loglik), factor + max(loglik))
 }
-write_csv(fits, "fits5.csv")
-```
-
-## Do fitting, with bootstrapping
-```{r}
-J <- 100
-bootfits <- data.frame(cme = rep(cmes, each = J), 
-                       bootstrap = rep(1:J, times = length(cmes)), 
-                       idx = 0, 
-                       loglik = -Inf)
-for (i in (J+1):(2*J)) {
-    print(i)
-    tmpdat <- cmedat %>% 
-        filter(cme == cmes[i]) %>% 
-        pull(count) %>% 
-        sample(N, replace = T)
-    tmpdat <- as.numeric(unname(table(factor(tmpdat, levels = 0:(O-1)))))
-    factor <- log(factorial(N) / prod(factorial(tmpdat)))
-    loglik <- rowSums(sweep(log(freqs[, 1:O]), 2, tmpdat, FUN = "*"))
-    bootfits[i, 3:4] <- c(which.max(loglik), factor + max(loglik))
-}
-
-pars[bootfits[(J+1):(2*J), 3], ] %>% 
-    group_by(alpha, f, R0) %>%
-    summarize(count = n()) %>%
-    ungroup %>% 
-    mutate(alphaI = alpha * f, alphaS = alpha * (1 - f)) %>% 
-    ggplot(aes(x = R0, y = f)) +
-    geom_point(aes(size = count), stroke = 0.5, alpha = 1, shape = 1) +
-    scale_size(range = c(0.5, 10)) +
-    ggtitle("bootstrap density for c2") +
-    theme_classic() +
-    theme(text=element_text(size=12,family="mono"),
-          legend.position = "bottom")
-
-write_csv(bootfits, "fits5boot.csv")
+write_csv(fits, "fits_genome.csv")
+fits <- read_csv("fits_genome.csv")
 ```
 
 ## Do constrained fitting
@@ -291,7 +260,7 @@ fits$cme[with(explore, R0 == 0)]
 fits$cme[with(explore, alpha == max(alpha))]
 fits$cme[with(explore, alpha == min(alpha))]
 
-tester <- "c4"
+tester <- "c86"
 cmedat %>%
     filter(cme == tester) %>%
     pull(count) %>% 
@@ -344,7 +313,7 @@ for (i in 1:length(cmes)) {
     goodness[i] <- pchisq(stat, df, lower.tail = F, log.p = T)
 }
 
-sum(exp(goodness)>0.01)
+cmes[exp(goodness)<0.01]
 
 data.frame(cme = cmes, pval = exp(goodness)) %>% 
     arrange(-pval) %>%
@@ -459,7 +428,7 @@ for (i in 1:length(cmes)) {
     tmpdat <- cmedat %>% filter(cme == cmes[i]) %>% pull(count)
     lr <- 2*abs(as.numeric(fits[fits$cme == cmes[i], 3]) -
                     as.numeric(fits0[fits0$cme == cmes[i], 3]))
-    df <- 1
+    df <- 2
     emplrt[i] <- pchisq(lr, df, lower.tail = F, log.p = T) - log(2)
 }
 
@@ -474,6 +443,8 @@ data.frame(cme = cmes, pval = exp(emplrt)) %>%
     ggtitle("within-subject transmission via empirical LRT") +
     theme(text=element_text(size=12,family="mono"),
           legend.position = "bottom")
+
+cmes[exp(emplrt) <= 0.01]
 
 data.frame(cme = cmes, good = exp(goodness), lrt = exp(emplrt)) %>% 
     arrange(-good) %>%
@@ -588,4 +559,122 @@ ggplot(distribution, aes(x = I, y = pi)) +
     ylim(0, 1) +
     theme(text = element_text(size = 12, family = "mono"),
           legend.position = "bottom")
+```
+
+## Retrodiction
+```{r}
+selected <- read_csv("retrodiction/selected.csv", col_names = F)[1:100, ]
+colnames(selected) <- c("idx", "alpha", "f", "R0")
+selected$idx <- as.integer(selected$idx)
+
+sims <- data.frame()
+for (i in 1:100) {
+    tmpsim <- data.frame(t(read_csv(paste0("retrodiction/dat_", i, ".csv"), col_names = F)))
+    tmpsim$par <- i
+    sims <- rbind(sims, tmpsim)
+}
+sims$rep <- rep(1:100, times = 100)
+write_csv(sims, "retrodiction/sims.csv")
+sims <- read_csv("retrodiction/sims.csv")
+
+for (i in 1:100) {
+    print(i)
+    stats <- data.frame(best = rep(0, 100 * 1001),
+                    loglik = -Inf,
+                    best0 = 0,
+                    loglik0 = -Inf,
+                    par = 0,
+                    rep = 0,
+                    strap = T)
+    for (j in 1:100) {
+        tmpstat <- suppressMessages(
+            data.frame(t(read_csv(paste0("retrodiction/stats_", i, "_", j, ".csv"), col_names = F))))
+        tmpstat$par <- i
+        tmpstat$rep <- j
+        tmpstat$strap <- T
+        tmpstat$strap[1] <- F
+        colnames(tmpstat) <- colnames(stats)
+        idx <- 1001 * (j - 1)
+        stats[(idx + 1):(idx + 1001), ] <- tmpstat
+    }
+    write_csv(stats, paste0("retrodiction/merge_", i, ".csv"))
+}
+stats <- data.frame(best = rep(0, 100 * 100 * 1001),
+                    loglik = -Inf,
+                    best0 = 0,
+                    loglik0 = -Inf,
+                    par = 0,
+                    rep = 0,
+                    strap = T)
+for (i in 1:100) {
+    print(i)
+    tmpstat <- suppressMessages(read_csv(paste0("retrodiction/merge_", i, ".csv"), col_names = T))
+    idx <- 100100 * (i - 1)
+    stats[(idx + 1):(idx + 100100), ] <- tmpstat
+}
+write_csv(stats, "retrodiction/merged.csv")
+stats <- read_csv("retrodiction/merged.csv")
+
+stats <- cbind(stats, pars[stats$best, ])
+bootstrapped <- stats %>%
+    group_by(par, rep) %>% 
+    summarize(estalpha = mean(alpha),
+              estf = mean(f),
+              estR0 = mean(R0))
+bootstrapped <- cbind(bootstrapped, selected[rep(1:100, each = 100), 2:4])
+bootstrapped %>% 
+    summarize(lower = quantile(estR0, 0.025),
+              mean = mean(estR0),
+              upper = quantile(estR0, 0.975),
+              true = mean(R0)) %>% 
+    ggplot(aes(x = true, y = mean)) +
+    geom_line() +
+    geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.1) +
+    geom_abline(slope = 1, intercept = 0, color = "red", linetype = 2) +
+    theme_classic()
+bootstrapped %>% 
+    ggplot(aes(x = R0, y = estR0)) +
+    geom_point(alpha = 0.05) +
+    geom_abline(slope = 1, intercept = 0, color = "red", linetype = 2) +
+    theme_classic() +
+    ylab("estimate") +
+    theme(text = element_text(size = 12, family = "mono"))
+
+bootstrapped <- bootstrapped %>% 
+    left_join(stats %>% 
+                  filter(!strap) %>% 
+                  select(par, rep, loglik, loglik0), 
+              by = c("par", "rep")) %>% 
+    mutate(emptest = pchisq(2*abs(loglik - loglik0), 
+                            2, lower.tail = F, log.p = F) / 2)
+
+sims$lambda <- apply(sims[, 1:50], 1, 
+                     \(x) sum((x + 0.001) * (0:(O - 1))) / (N + 0.001 * O))
+expected <- t(sapply(sims$lambda, \(x) N * dpois(0:(O - 1), x)))
+sims$goodness <- pchisq(rowSums((sims[, 1:50] - expected) ^ 2 / expected), 
+                   O - 2, lower.tail = F, log.p = F)
+
+bootstrapped <- bootstrapped %>% 
+    left_join(sims %>% select(par, rep, goodness), 
+              by = c("par", "rep"))
+
+bootstrapped %>% 
+    mutate(is0 = ifelse(R0 == 0, "R0 = 0", "R0 > 0")) %>% 
+    ggplot(aes(x = goodness)) +
+    geom_histogram(color = "black", fill = "white") +
+    xlab("Pearson's test") +
+    facet_wrap(~is0) +
+    geom_vline(xintercept = 0.01, color = "red", linetype = 2) +
+    theme_classic()
+bootstrapped %>% 
+    mutate(is0 = ifelse(R0 == 0, "R0 = 0", "R0 > 0")) %>% 
+    ggplot(aes(x = emptest)) +
+    geom_histogram(color = "black", fill = "white") +
+    xlab("p-value") +
+    ggtitle("likelihood-ratio test") +
+    facet_wrap(~is0) +
+    geom_vline(xintercept = 0.01, color = "red", linetype = 2) +
+    theme_classic() +
+    theme(text = element_text(size = 12, family = "mono"))
+
 ```
