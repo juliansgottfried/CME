@@ -3,6 +3,4 @@ eitan*
 JLresults
 retrodiction
 output
-fits_*.csv
-results.csv
-pars.csv
+*.csv

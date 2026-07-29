@@ -260,7 +260,7 @@ fits$cme[with(explore, R0 == 0)]
 fits$cme[with(explore, alpha == max(alpha))]
 fits$cme[with(explore, alpha == min(alpha))]
 
-tester <- "c86"
+tester <- "c4"
 cmedat %>%
     filter(cme == tester) %>%
     pull(count) %>% 
@@ -633,7 +633,8 @@ bootstrapped %>%
     geom_abline(slope = 1, intercept = 0, color = "red", linetype = 2) +
     theme_classic()
 bootstrapped %>% 
-    ggplot(aes(x = R0, y = estR0)) +
+    filter(R0 > 0) %>% 
+    ggplot(aes(x = alpha*f*R0, y = estalpha*estf*estR0)) +
     geom_point(alpha = 0.05) +
     geom_abline(slope = 1, intercept = 0, color = "red", linetype = 2) +
     theme_classic() +
@@ -677,4 +678,199 @@ bootstrapped %>%
     theme_classic() +
     theme(text = element_text(size = 12, family = "mono"))
 
+stats %>%
+    group_by(par, rep) %>% 
+    mutate(og1 = alpha[1], og2 = f[1], og3 = R0[1]) %>%
+    summarize(alpha = mean(alpha),
+              f = mean(f),
+              R0 = mean(R0),
+              og1 = mean(og1),
+              og2 = mean(og2),
+              og3 = mean(og3)) %>%
+    ggplot(aes(x = og1, y = alpha, color = og3)) +
+    geom_point() +
+    theme_classic()
+
+# bootstrapping is generally correlated
+# but i suppose why not just do exploration with both in turn
+
+bootstrapped %>% 
+    filter(R0>0) %>% 
+    ggplot(aes(x = estR0, y = estalpha*estf, color = R0)) +
+    geom_point(alpha = 0.1) +
+    scale_color_viridis_c(option = 5) +
+    theme_classic() +
+    theme(text = element_text(size = 12, family = "mono"))
+
+selected[1, ]
+stats %>% filter(par == 100, rep == 15, strap) %>% 
+    ggplot(aes(x = f)) +
+    geom_density() +
+    theme_classic()
+
 ```
+
+```{r}
+dimred <- freqs[apply(freqs[, 1:O], 1, which.max) == 1, ]
+sims <- matrix(0, O, nrow(dimred) * 10)
+for (i in 1:nrow(dimred)) {
+    if (i %% 1000 == 0) print(i)
+    idx <- 10 * (i - 1)
+    sims[, (idx + 1):(idx + 10)] <- rmultinom(10, N, dimred[i, 1:O])
+}
+
+# moments <- apply(sims, 2, \(f) {
+#     x <- 0:(O - 1)
+#     mu <- sum(x * f)
+#     sigma <- sqrt(sum((x - mu) ^ 2 * f))
+#     gamma <- sum(((x - mu) / sigma) ^ 3 * f)
+#     c(mu, sigma ^ 2, gamma)
+#     })
+
+K <- 5
+# pc <- prcomp(dimred[, 1:O], scale. = T, center = T)
+pc <- prcomp(sims, scale. = T, center = T, rank. = K)
+# pc <- prcomp(t(moments), scale. = T, center = T)
+
+summary(pc)
+rotated <- pc$x
+loadings <- pc$rotation
+
+cbind(rotated, dimred[, (O + 1):(O + 3)]) %>% 
+    slice_sample(n = 10000) %>% 
+    ggplot(aes(x = alpha, y = PC1)) +
+    geom_point(alpha = 0.1) +
+    theme_classic()
+
+loadings %>% 
+    data.frame %>% 
+    mutate(idx = row_number()) %>% 
+    pivot_longer(starts_with("PC")) %>% 
+    ggplot(aes(x = idx, y = value, group = name, color = name)) +
+    scale_color_viridis_d(direction = -1) +
+    geom_line() +
+    theme_classic()
+
+M <- 100
+J <- 1000
+testidx <- sample(1:nrow(dimred), M, replace = F)
+testers <- dimred[testidx, 1:O]
+conv <- matrix(0, M, K)
+for (i in 1:M) {
+    print(i)
+    sim <- as.numeric(rmultinom(1, N, testers[i, ]))
+    simdat <- rep(0:(O - 1), sim)
+    simfreq <- rep(0, O)
+    for (j in 1:J) {
+        simfreq <- simfreq + 
+            as.numeric(table(factor(
+                sample(simdat, N, replace = T), levels = 0:(O - 1)))) / 42
+    }
+    simfreq <- simfreq / J
+    conv[i, ] <- ((simfreq - pc$center) / pc$scale) %*% loadings
+}
+mins <- matrix(0, M, nrow(dimred))
+for (i in 1:nrow(dimred)) {
+    if (i %% 1000 == 0) print(i)
+    mins[, i] <- apply(conv, 1, \(x) sum(abs(rotated[i, ] - x)))
+}
+ests <- data.frame(idx = testidx, est = apply(mins, 1, which.min))
+
+plot(dimred[ests$idx, (O + 1):(O + 3)]$alpha,
+     dimred[ests$est, (O + 1):(O + 3)]$alpha)
+plot(dimred[ests$idx, (O + 1):(O + 3)]$R0,
+     dimred[ests$est, (O + 1):(O + 3)]$R0)
+plot(dimred[ests$idx, (O + 1):(O + 3)]$f,
+     dimred[ests$est, (O + 1):(O + 3)]$f)
+
+sim <- as.numeric(rmultinom(1, N, testers[7, ]))
+
+```
+
+let's use 5 bins total
+and let's shave off the extraneous parameters
+and then try the retrodiction again
+
+```{r}
+slimfreq <- freqs[apply(freqs[, 1:O], 1, which.max) == 1, ]
+binned <- cbind(slimfreq[, 1:5], 
+                X6 = rowSums(slimfreq[, 6:O]),
+                slimfreq[, (O+1):(O+3)])
+logged <- as.matrix(log(binned[, 1:6]))
+
+npars <- 100
+M <- 100
+J <- 1
+testidx <- sample(1:nrow(binned), npars, replace = F)
+bestidx2 <- matrix(0, M * J, npars)
+for (i in 1:npars) {
+    print(i)
+    tmpdat <- rmultinom(M, N, binned[testidx[i], 1:6])
+    tmpdatresample <- matrix(0, 6, M * J)
+    if (J == 1) { tmpdatresample <- tmpdat
+    } else {
+        for (j in 1:J) {
+            tmpdatresample[, M * (j - 1) + 1:M] <- apply(tmpdat, 2, \(x) {
+                table(factor(sample(rep(0:5, as.numeric(x)), N, replace = T), 
+                             levels = 0:5))
+            })
+        }
+    }
+    bestidx2[, i] <- apply(tmpdatresample, 2, \(x) which.max(logged %*% x))
+}
+pars <- matrix(0, 2 * npars, 3)
+for (i in 1:npars) {
+    idx <- 2 * (i - 1)
+    pars[2 * (i - 1) + 1:2, ] <- 
+        as.matrix(rbind(binned[testidx[i], 7:9],
+                        apply(binned[bestidx[, i], 7:9], 2, mean)))
+}
+pars <- data.frame(cbind(pars[rep(c(T, F), npars), ],
+              pars[rep(c(F, T), npars), ]))
+
+# ggplot(pars, aes(x = X1, y = X4)) +
+#     geom_point(alpha = 0.5) +
+#     geom_abline(color = "red", linetype = 2) +
+#     theme_classic()
+# ggplot(pars, aes(x = X2, y = X5)) +
+#     geom_point(alpha = 0.5) +
+#     geom_abline(color = "red", linetype = 2) +
+#     theme_classic()
+# ggplot(pars, aes(x = X1*X2, y = X4*X5)) +
+#     geom_point(alpha = 0.5) +
+#     geom_abline(color = "red", linetype = 2) +
+#     theme_classic()
+# ggplot(pars, aes(x = X3, y = X6)) +
+#     geom_point(alpha = 0.5) +
+#     geom_abline(color = "red", linetype = 2) +
+#     theme_classic()
+
+pars <- pars %>% 
+    rename(alpha = X1, f = X2, R0 = X3) %>% 
+    mutate(alphaI = alpha * f,
+           alpha_se = (X4 - alpha) / X4,
+           f_se = (X5 - f) / X5,
+           R0_se = (X6 - R0) / X6) %>% 
+    arrange(-alpha_se) %>% 
+    mutate(idx = row_number())
+
+pars %>% ggplot(aes(x = f, y = alpha_se)) + 
+    geom_point(shape = 3) +
+    geom_hline(yintercept = 0, color = "red", linetype = 2) +
+    theme_classic()
+pars %>% ggplot(aes(x = alpha, y = f_se)) + 
+    geom_point(shape = 3) +
+    geom_hline(yintercept = 0, color = "red", linetype = 2) +
+    theme_classic()
+pars %>% ggplot(aes(x = alpha, y = R0_se)) + 
+    geom_point(shape = 3) +
+    geom_hline(yintercept = 0, color = "red", linetype = 2) +
+    theme_classic()
+
+with(slimfreq, R0) %>% range
+
+```
+
+alphaI 0 to 10
+alphaS 0 to 100
+R0 0 to 10
