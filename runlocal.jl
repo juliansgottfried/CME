@@ -5,9 +5,9 @@ using JLD2, DelimitedFiles
 f = 0:0.01:0.99
 R0 = 0:0.1:9.9
 
-α = 0:1
+α = 10:11
 f = 0:1
-R0 = 0:1
+R0 = 5:6
 
 J = 200
 G = 7000
@@ -16,9 +16,12 @@ nbin = 50
 nN = 168
 
 for i in eachindex(R0)
+    i = 1
     counts = zeros(Int, nbin * nN, length(f) * length(α))
     for j in eachindex(α)
         for k in eachindex(f)
+            j = 1
+            k = 1
             println("i: $i, j: $j, k: $k")
             all = sim.replication(J, G, inter, nN, α[j], f[k], R0[i])
             all[all .> nbin - 1] .= nbin - 1
