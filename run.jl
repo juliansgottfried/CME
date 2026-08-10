@@ -10,24 +10,32 @@ addprocs(SlurmManager())
 # @everywhere f = 0:0.005:0.495
 # @everywhere R0 = 0:0.1:9.9
 
-@everywhere αS = 0:1:99
-@everywhere αI = 0:0.1:9.9
+# @everywhere αS = 0:1:99
+# @everywhere αI = 0:0.1:9.9
+# @everywhere R0 = 0:0.1:9.9
+
+@everywhere α = [3; 9:16; 26; 28; 30; 33; 58:67; 69:80; 84:89; 91:94; 96:97]
+@everywhere f = 0:0.01:0.99
 @everywhere R0 = 0:0.1:9.9
 
 @everywhere J = 200
 @everywhere G = 7000
 @everywhere inter = 100
+@everywhere nbin = 50
+@everywhere nN = 168
 
-pmap(1:100) do i
-    counts = zeros(Int, 50, 100 ^ 2)
-    for j in 1:100
-        for k in 1:100
+pmap(eachindex(R0)) do i
+    counts = zeros(Int, nbin * nN, length(f) * length(α))
+    for j in eachindex(α)
+        for k in eachindex(f)
             println("i: $i, j: $j, k: $k")
-            all = sim.replication(J, G, inter, αS[i], αI[j], R0[k])
-            all[all .> 49] .= 49
+            all = sim.replication(J, G, inter, nN, α[j], f[k], R0[i])
+            all[all .> nbin - 1] .= nbin - 1
             all .+= 1
-            [counts[l, 100 * (j - 1) + k] += 1 for l in all]
+            for u in 1:nN
+                [counts[nbin * (u - 1) + l, length(f) * (j - 1) + k] += 1 for l in all[u, :]]
+            end
         end
     end
-    writedlm("/scratch/users/jgottf/CME/JLresults6/counts_$i.csv", counts, ',')
+    writedlm("/scratch/users/jgottf/CME/JLresults7/counts_$i.csv", counts, ',')
 end

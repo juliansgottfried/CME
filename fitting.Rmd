@@ -17,12 +17,14 @@ setwd("~/Desktop/CME")
 
 ## Local sim functions
 ```{r}
-singlerun <- function(alpha, f, R0, G, S, I) {
+singlerun <- function(alphaS, alphaI, R0, G, S, I) {
+    counter <- rep(0, 500)
     Ss <- rep(0, G)
     Is <- rep(0, G)
     t <- 0
     g <- 0
     while (g < G) {
+        counter[S + I] = counter[S + I] + 1
         if (g >= t) {
             Ss[t + 1] <- S
             Is[t + 1] <- I
@@ -30,15 +32,15 @@ singlerun <- function(alpha, f, R0, G, S, I) {
         }
         if (S + I == 0) { foi = 0
         } else {foi <- R0 * S * I / (S + I)}
-        rate <- alpha + foi + S + I
+        rate <- alphaS + alphaI + foi + S + I
         g <- g - 1 / rate * log(1 - runif(1))
         pick <- runif(1)
-        if (pick < (1 - f) * alpha / rate) { S <- S + 1
-        } else if (pick < alpha / rate) { I <- I + 1
-        } else if (pick < (alpha + foi) / rate) { 
+        if (pick < alphaS / rate) { S <- S + 1
+        } else if (pick < (alphaS + alphaI) / rate) { I <- I + 1
+        } else if (pick < (alphaS + alphaI + foi) / rate) { 
             S <- S - 1
             I <- I + 1
-        } else if (pick < (alpha + foi + S) / rate) { S <- S - 1
+        } else if (pick < (alphaS + alphaI + foi + S) / rate) { S <- S - 1
         } else {I <- I - 1}
     }
     c(Ss, Is)
@@ -58,8 +60,12 @@ plotsingle <- function(result, G) {
 
 ## Grid parameters
 ```{r}
-alpha <- seq(from=0,by=1,to=99)
-f <- seq(from=0,by=0.005,to=0.495)
+# alpha <- seq(from=0,by=1,to=99)
+# f <- seq(from=0,by=0.005,to=0.495)
+# R0 <- seq(from=0,by=0.1,to=9.9)
+
+alphaS <- seq(from=0,by=1,to=99)
+alphaI <- seq(from=0,by=0.1,to=9.9)
 R0 <- seq(from=0,by=0.1,to=9.9)
 
 N <- 42
@@ -71,31 +77,36 @@ O <- 50
 counts <- NULL
 for (i in 1:100) {
     print(i)
-    countstmp <- data.frame(t(read.table(paste0("JLresults/counts_",i,".csv"), sep=",")))
-    countstmp$alpha <- alpha[i]
-    countstmp$f <- 0
+    filename <- paste0("JLresults/counts_",i,".csv")
+    if (file.exists(filename)) {
+        countstmp <- data.frame(t(read.table(paste0("JLresults/counts_",i,".csv"), sep=",")))
+    } else countstmp <- data.frame(matrix(NA, 100 ^ 2, O))
+    countstmp$alphaS <- alphaS[i]
+    countstmp$alphaI <- 0
     countstmp$R0 <- 0
     for (j in 1:100) {
         for (k in 1:100) {
             idx <- 100 * (j - 1) + k
-            countstmp$f[idx] <- f[j]
+            countstmp$alphaI[idx] <- alphaI[j]
             countstmp$R0[idx] <- R0[k]
         }
     }
     counts <- rbind(counts, countstmp)
 }
-write_csv(counts, "results.csv")
+write_csv(counts, "results2.csv")
 ```
 
 ## Convert counts
 ```{r}
-counts <- read_csv("results.csv")
+counts <- read_csv("results2.csv")
 freqs <- counts
-pseudo <- 1
+pseudo <- 1 / 10
 freqs[, 1:O] <- freqs[, 1:O] + pseudo
 rowsums <- rowSums(freqs[, 1:O])
 freqs[, 1:O] <- freqs[, 1:O] %>% 
     mutate_all(\(x) x / rowsums)
+
+freqs$alphaS[!is.na(freqs$X1)] %>% unique
 
 write_csv(freqs, "pars.csv", col_names = T)
 freqs <- read_csv("pars.csv", col_names = T)
@@ -103,9 +114,27 @@ freqs <- read_csv("pars.csv", col_names = T)
 freqs[14000, ] %>% 
     pivot_longer(starts_with("X"), names_to = "bin", values_to = "proportion") %>% 
     mutate(bin = as.numeric(str_remove(bin, "X")) - 1) %>%
-    ggplot(aes(x = bin, y = proportion))+
+    ggplot(aes(x = bin, y = proportion)) +
     geom_point()+
     theme_classic()
+
+moments <- cbind(X1 = rowMeans(as.matrix(freqs[, 1:O]) %*% as.matrix(0:(O - 1))),
+                 X2 = rowMeans(as.matrix(freqs[, 1:O]) %*% as.matrix((0:(O - 1)) ^ 2)),
+                 freqs[, (O + 1):(O + 3)]) %>%
+    mutate(mu = X1,
+           var = X2 - X1 ^ 2) %>% 
+    mutate(p = mu / var) %>% 
+    mutate(r = mu * p / (1 - p))
+moments %>% 
+    filter(r > 0, p < 1, p > 0) %>% 
+    mutate(f = alphaI / (alphaS + alphaI)) %>% 
+    sample_n(10000) %>% 
+    ggplot(aes(x = f, y = log(mu), color = alphaS)) + 
+    geom_point(alpha = 0.1) +
+    theme_classic()
+
+cmemat %>% filter(c13) %>% pull(species) %>% unique %>% length
+
 ```
 
 ## Get CME data
@@ -117,6 +146,21 @@ cmemat$genome <- str_split(cmemat$host_id, "_", simplify = T)[, 2]
 hostdat <-  read.table("eitan_data/hosts.txt", header = T, sep = "\t")
 cmemat <- left_join(cmemat, hostdat %>% select(species, genus, family, host_id), by = "host_id")
 
+cmetab <- read.table("eitan_data/cme_table.txt", header = T, sep = "\t")
+cmetab %>% 
+    ggplot(aes(x = host_count, y = species_count)) +
+    geom_point(alpha = 0.5) +
+    geom_abline(color = "red", intercept = 0, slope = 1, linetype = 2) +
+    theme_classic()
+cmetab %>% 
+    arrange(host_count / species_count) %>% 
+    filter(is_cme) %>% 
+    mutate(cme = row_number()) %>% 
+    ggplot(aes(x = cme, y = host_count / species_count)) +
+    geom_point(alpha = 0.5) +
+    geom_hline(yintercept = 1, color = "red", linetype = 2) +
+    theme_classic()
+
 cmedat <- cmemat %>% 
     group_by(subject, genome) %>% 
     summarize_at(cmes, \(x) sum(x) != 0) %>% 
@@ -124,6 +168,110 @@ cmedat <- cmemat %>%
     pivot_longer(cols = -subject, names_to = "cme") %>% 
     group_by(cme, subject) %>% 
     summarize(count = sum(value), .groups = "drop")
+
+hostdat %>% group_by(aid, species) %>% summarize(n=n()) %>% pull(n) %>% table
+
+alphas <- hostdat %>% 
+    group_by(species) %>% summarize(alpha = n()) %>% mutate(alpha = alpha / n()) %>% 
+    mutate(alpha = alpha * (hostdat %>% 
+                              group_by(aid) %>% 
+                              summarize(n = n()) %>% 
+                              pull(n) %>% mean))
+alphas1 <- hostdat %>% 
+    group_by(species) %>% summarize(alpha = n()) %>% mutate(alpha = alpha / n()) %>% 
+    mutate(alpha = alpha * (hostdat %>% 
+                              group_by(aid) %>% 
+                              summarize(n = n()) %>% 
+                              pull(n) %>% mean))
+alphas2 <- hostdat %>% 
+    group_by(species) %>% summarize(alpha = n() / 42)
+
+data.frame(x = alphas1$alpha, y = alphas2$alpha) %>% 
+    ggplot(aes(x = x, y = y)) + 
+    geom_point() + 
+    theme_classic()
+
+estf <- cmemat %>% 
+    group_by(species, subject) %>% 
+    summarize_at(cmes, \(x) sum(x) != 0) %>% 
+    summarize_at(cmes, mean)
+estf %>% 
+    mutate(sums = rowSums(estf[, 2:length(cmes)])) %>% 
+    left_join(alphas, by = "species") %>% 
+    arrange(-sums * alpha) %>% 
+    mutate(species = as.integer(factor(species, levels = unique(species)))) %>% 
+    pivot_longer(all_of(cmes), names_to = "cme", values_to = "f") %>% 
+    filter(f > 0) %>% 
+    ggplot(aes(x = species, y = f * alpha, color = cme)) +
+    geom_point(alpha = 0.5) +
+    scale_color_viridis_d(option = 2) +
+    guides(color = "none") +
+    ylab("alphaI") +
+    theme_classic()
+estf %>% 
+    mutate(sums = rowSums(estf[, 2:length(cmes)])) %>% 
+    left_join(alphas, by = "species") %>% 
+    arrange(-sums * alpha) %>% 
+    mutate(species = as.integer(factor(species, levels = unique(species)))) %>% 
+    pivot_longer(all_of(cmes), names_to = "cme", values_to = "f") %>% 
+    filter(f > 0) %>% 
+    ggplot(aes(x = alpha, y = f, color = species)) +
+    geom_point(alpha = 0.5) +
+    scale_color_viridis_c(option = 2) +
+    guides(color = "none") +
+    ylab("f") +
+    theme_classic()
+
+cmematsp <- cmemat %>% 
+        group_by(subject, species) %>% 
+        summarize_at(cmes, \(x) sum(x) != 0)
+hostdatsp <- hostdat %>% 
+        group_by(aid, species) %>% 
+        summarize(n = n())
+subjects <- unique(cmemat$subject)
+pvals <- rep(0, length(cmes))
+for (i in 1:length(cmes)) {
+    print(i)
+    cseg <- cmes[i]
+    specieslist <- table(cmematsp[unlist(cmematsp[, cseg]), "species"])
+    estp <- unlist(lapply(names(specieslist), \(x) 
+                          specieslist[x] / table(hostdatsp$species)[x]))
+    estp[names(estp)] <- mean(estp)
+    pi <- rep(0, N)
+    for (j in 1:N) {
+        tester <- estp[hostdatsp[hostdatsp$aid == subjects[j], ]$species]
+        length(tester[!is.na(tester)])
+        pi[j] <- 1 - 
+            prod(1 - estp[hostdatsp[hostdatsp$aid == subjects[j], ]$species], na.rm = T)
+    }
+    pvals[i] <- poisbinom::ppoisbinom(cmetab$subject_count[cmetab$cseg == cseg], 
+                                      pi, lower_tail = T)
+}
+hist(pvals)
+
+cmemat %>% filter(c4) %>% select(subject, species) %>% group_by(subject) %>% 
+    distinct %>% pull(species) %>% length
+
+
+
+store <- matrix(0, length(cmes), 2)
+for (i in 1:length(cmes)) {
+    fams <- cmemat %>% filter(.[[cmes[i]]]) %>% pull(family) %>% unique
+    spstats <- cmemat %>% 
+        filter(family %in% fams) %>% 
+        group_by(subject) %>% 
+        select(subject, species) %>%
+        distinct %>% 
+        summarize(n = n()) %>% 
+        pull(n)
+    store[i, ] <- c(mean(spstats), max(spstats))
+}
+hist(store[, 1], breaks = 20)
+hist(round(store[, 1], 0), breaks = 20)
+length(unique(round(store[, 1], 0)))
+
+sort(unique(store[, 2]))
+
 ```
 
 ## Pre-estimate f
@@ -169,18 +317,18 @@ ggplot(data.frame(closestf),
 
 ## Do fitting
 ```{r}
-pars <- freqs %>% select(alpha:R0)
+pars <- slimbin %>% select(alphaS:R0)
 fits <- data.frame(cme = cmes, idx = 0, loglik = -Inf)
 for (i in 1:length(cmes)) {
     print(i)
     tmpdat <- cmedat %>% filter(cme == cmes[i]) %>% pull(count)
     tmpdat <- as.numeric(unname(table(factor(tmpdat, levels = 0:(O-1)))))
     factor <- log(factorial(N) / prod(factorial(tmpdat)))
-    loglik <- rowSums(sweep(log(freqs[, 1:O]), 2, tmpdat, FUN = "*"))
+    loglik <- rowSums(sweep(log(slimbin[, 1:O]), 2, tmpdat, FUN = "*"))
     fits[i, 2:3] <- c(which.max(loglik), factor + max(loglik))
 }
-write_csv(fits, "fits_genome.csv")
-fits <- read_csv("fits_genome.csv")
+write_csv(fits, "fits_slim.csv")
+fits <- read_csv("fits_slim.csv")
 ```
 
 ## Do constrained fitting
@@ -191,7 +339,7 @@ for (i in 1:length(cmes)) {
     tmpdat <- cmedat %>% filter(cme == cmes[i]) %>% pull(count)
     tmpdat <- as.numeric(unname(table(factor(tmpdat, levels = 0:(O-1)))))
     factor <- log(factorial(N) / prod(factorial(tmpdat)))
-    loglik <- apply(freqs[freqs$R0 == 0, 1:O], 1, \(x) sum(tmpdat * log(x)))
+    loglik <- apply(slimbin[slimbin$R0 == 0, 1:O], 1, \(x) sum(tmpdat * log(x)))
     fits0[i, ] <- c(cmes[i], which.max(loglik), factor + max(loglik))
 }
 ```
@@ -199,12 +347,23 @@ for (i in 1:length(cmes)) {
 ## Plot parameter spread
 ```{r}
 explore <- pars[fits$idx, ] %>% mutate(cme = cmes)
+explore$identified <- slimbin[fits$idx, ]$identifiable
+sum(explore$identified)
 
 explore %>% 
-    group_by(alpha, f, R0) %>% 
+    arrange(-(alphaI + R0)) %>% 
+    mutate(cme = row_number()) %>% 
+    ggplot(aes(x = cme, y = R0 + alphaI)) +
+    geom_hline(yintercept = 3, color = "red", linetype = 2) +
+    geom_point(shape = 15, alpha = 0.5) +
+    theme_classic() +
+    theme(text=element_text(size=12,family="mono"),
+          legend.position = "bottom")
+
+explore %>% 
+    group_by(alphaS, alphaI, R0) %>% 
     summarize(count = n()) %>% 
     ungroup %>% 
-    mutate(alphaI = alpha * f, alphaS = alpha * (1 - f)) %>%
     pivot_longer(c(alphaS,alphaI,R0), names_to = "parameter") %>% 
     mutate(parameter = factor(parameter, 
                               levels = c("alphaS","alphaI","R0"))) %>% 
@@ -212,15 +371,14 @@ explore %>%
     geom_histogram(color = "white", fill = "black")+
     ggtitle("parameter fits across CMEs") +
     theme_classic() +
-    facet_wrap(~parameter, scale="free")+
+    facet_wrap(~parameter, scale="free") +
     theme(text=element_text(size=12,family="mono"),
           legend.position = "bottom")
 
 explore %>% 
-    group_by(alpha, f, R0) %>%
+    group_by(alphaS, alphaI, R0) %>%
     summarize(count = n()) %>%
     ungroup %>% 
-    mutate(alphaI = alpha * f, alphaS = alpha * (1 - f)) %>% 
     ggplot(aes(x = alphaS, y = R0)) +
     geom_point(aes(size = count), stroke = 0.5, alpha = 1, shape = 1) +
     scale_size(range = c(0.5, 10)) +
@@ -250,15 +408,14 @@ data.frame(x = 1:length(cmes),
     theme_classic() +
     theme(text=element_text(size=12,family="mono"),
           legend.position = "bottom")
-
 ```
 
 ## Plot particular CMEs
 ```{r}
 fits$cme[with(explore, R0 == max(R0))]
 fits$cme[with(explore, R0 == 0)]
-fits$cme[with(explore, alpha == max(alpha))]
-fits$cme[with(explore, alpha == min(alpha))]
+fits$cme[with(explore, alphaI == max(alphaI))]
+fits$cme[with(explore, alphaI == min(alphaI))]
 
 tester <- "c4"
 cmedat %>%
@@ -277,7 +434,8 @@ cmedat %>%
     ggtitle(tester) +
     theme(text=element_text(size=12,family="mono"),
           legend.position = "bottom")
-counts[fits$idx[fits$cme == tester], 1:O] %>% 
+
+round(N * slimbin[fits$idx[fits$cme == tester], 1:O], 1) %>% 
     pivot_longer(everything(), 
                  names_to = "count", 
                  values_to="freq") %>% 
@@ -292,11 +450,24 @@ counts[fits$idx[fits$cme == tester], 1:O] %>%
           legend.position = "bottom")
 
 testpars <- explore[explore$cme == tester, ]
-plotsingle(singlerun(testpars$alpha,
-                     testpars$f, 
+#testpars$alphaS <- testpars$alpha * (1 - testpars$f)
+#testpars$alphaI <- testpars$alpha * testpars$f
+plotsingle(singlerun(testpars$alphaS,
+                     testpars$alphaI, 
                      testpars$R0,
                      1000,
                      25, 0), 1000)
+result <- singlerun(testpars$alphaS,
+                     testpars$alphaI, 
+                     testpars$R0,
+                     1000,
+                     25, 0)
+Sres <- result[1:1000]
+Ires <- result[1001:2000]
+data.frame(t = 1:1000,freq = Ires/(Sres+Ires)) %>% 
+    ggplot(aes(x = t, y = freq)) +
+    geom_line() +
+    theme_classic()
 ```
 
 ## Poisson goodness of fit
@@ -432,19 +603,20 @@ for (i in 1:length(cmes)) {
     emplrt[i] <- pchisq(lr, df, lower.tail = F, log.p = T) - log(2)
 }
 
-data.frame(cme = cmes, pval = exp(emplrt)) %>% 
+data.frame(cme = cmes, pval = exp(emplrt), identified = explore$identified) %>% 
+    filter(identified) %>% 
     arrange(-pval) %>%
     mutate(idx = row_number()) %>% 
     ggplot(aes(x=idx,y=pval))+
     geom_point(alpha = 1, shape = 3)+
-    geom_hline(yintercept = 0.01, color="red", linetype=2)+
+    geom_hline(yintercept = 0.05, color="red", linetype=2)+
     theme_classic()+
     xlab("cme")+ylab("p-value")+
-    ggtitle("within-subject transmission via empirical LRT") +
     theme(text=element_text(size=12,family="mono"),
           legend.position = "bottom")
 
-cmes[exp(emplrt) <= 0.01]
+data.frame(cme = cmes, pval = exp(emplrt), identified = explore$identified) %>% 
+    filter(identified, pval < 0.05) %>% pull(cme)
 
 data.frame(cme = cmes, good = exp(goodness), lrt = exp(emplrt)) %>% 
     arrange(-good) %>%
@@ -561,7 +733,7 @@ ggplot(distribution, aes(x = I, y = pi)) +
           legend.position = "bottom")
 ```
 
-## Retrodiction
+## UNHELPFUL retrodiction section
 ```{r}
 selected <- read_csv("retrodiction/selected.csv", col_names = F)[1:100, ]
 colnames(selected) <- c("idx", "alpha", "f", "R0")
@@ -710,6 +882,7 @@ stats %>% filter(par == 100, rep == 15, strap) %>%
 
 ```
 
+## UNHELPFUL pca stuff
 ```{r}
 dimred <- freqs[apply(freqs[, 1:O], 1, which.max) == 1, ]
 sims <- matrix(0, O, nrow(dimred) * 10)
@@ -787,90 +960,369 @@ sim <- as.numeric(rmultinom(1, N, testers[7, ]))
 
 ```
 
-let's use 5 bins total
-and let's shave off the extraneous parameters
-and then try the retrodiction again
-
+## Proper retrodiction
 ```{r}
-slimfreq <- freqs[apply(freqs[, 1:O], 1, which.max) == 1, ]
-binned <- cbind(slimfreq[, 1:5], 
-                X6 = rowSums(slimfreq[, 6:O]),
-                slimfreq[, (O+1):(O+3)])
-logged <- as.matrix(log(binned[, 1:6]))
+lO <- 50
+ok <- sapply(cmes, \(x) {
+    cmedat %>%
+        filter(cme == x) %>%
+        pull(count) %>%
+        factor(levels = 0:(O - 1)) %>%
+        table %>%
+        as.numeric
+    }, simplify = T)
+ok <- rbind(ok[1:(lO - 1), ], colSums(ok[lO:O, ]))
+sum(apply(ok, 2, which.max) != 1)
 
-npars <- 100
-M <- 100
-J <- 1
-testidx <- sample(1:nrow(binned), npars, replace = F)
-bestidx2 <- matrix(0, M * J, npars)
+binned <- cbind(freqs[, 1:(lO - 1)], 
+                X = rowSums(freqs[, lO:O]),
+                freqs[, (O+1):(O+3)])
+colnames(binned)[lO] <- paste0("X", lO)
+binned <- binned[!is.na(binned$X1), ]
+slimbin <- binned[apply(binned[, 1:lO], 1, which.max) == 1, ]
+
+slimbin %>% 
+    mutate_at(paste0("X", 1:lO), \(x) round(x, 3)) %>%
+    summarize(.by = starts_with("X"),
+              alphaS = alphaS[1],
+              alphaI = alphaI[1],
+              R0 = R0[1],
+              identifiable = n() == 1) %>% 
+    ggplot(aes(x = R0, y = alphaI, fill = identifiable)) + 
+    geom_tile(aes(alpha = !identifiable), color = "black", linewidth = 0.01) +
+    scale_fill_manual(values = c("black","white"),
+                      labels = c("non-identifiable", "identifiable"),
+                      name = "") +
+    guides(alpha = "none") +
+    theme_classic() +
+    theme(text = element_text(size = 12, family = "mono"))
+
+slimbin <- slimbin %>% 
+    summarize(.by = starts_with("X"),
+              alphaS = alphaS[1],
+              alphaI = alphaI[1],
+              R0 = R0[1],
+              identifiable = n() == 1)
+
+slimbin[, 1:lO] <- t(apply(slimbin[, 1:lO], 1, \(x) (x + 0.00001) / sum(x + 0.00001)))
+
+logged <- as.matrix(log(slimbin[, 1:lO]))
+logged0 <- logged[slimbin$R0 == 0, ]
+
+npars <- 500
+M <- 1
+J <- 10
+testidx <- sample(1:nrow(slimbin), npars, replace = F)
+# sum(slimbin[testidx, ]$R0 == 0)
+# testidx <- c(sample((1:nrow(slimbin))[slimbin$R0 == 0], npars / 2, replace = F),
+#              sample((1:nrow(slimbin))[slimbin$R0 != 0], npars / 2, replace = F))
+# testidx <- unlist(sapply(seq(from = 0, by = 0.1, to = 2.9), \(x) {
+#     chunk <- (1:nrow(slimbin))[slimbin$R0 == 1 & slimbin$alphaI == x]
+#     if (length(chunk) == 0) {
+#         returner <- NULL
+#     } else returner <- sample((1:nrow(slimbin))[slimbin$R0 == 1 & slimbin$alphaI == x], 
+#            7, replace = F)
+#     returner}))
+# testidx <- unlist(sapply(seq(from = 0, by = 0.1, to = 2.9), \(x) {
+#     chunk <- (1:nrow(slimbin))[slimbin$R0 == x & slimbin$alphaI == 1]
+#     if (length(chunk) == 0) {
+#         returner <- NULL
+#     } else returner <- sample((1:nrow(slimbin))[slimbin$R0 == x & slimbin$alphaI == 1], 
+#            7, replace = F)
+#     returner}))
+# npars <- length(testidx)
+
+bestidx <- matrix(0, M * J, npars)
+emplrt <- matrix(0, M * J, npars)
+# lrt <- matrix(0, M * J, npars)
+# goodness <- matrix(0, M * J, npars)
 for (i in 1:npars) {
     print(i)
-    tmpdat <- rmultinom(M, N, binned[testidx[i], 1:6])
-    tmpdatresample <- matrix(0, 6, M * J)
+    tmpdat <- rmultinom(M, N, slimbin[testidx[i], 1:lO])
+    tmpdatresample <- matrix(0, lO, M * J)
     if (J == 1) { tmpdatresample <- tmpdat
     } else {
         for (j in 1:J) {
             tmpdatresample[, M * (j - 1) + 1:M] <- apply(tmpdat, 2, \(x) {
-                table(factor(sample(rep(0:5, as.numeric(x)), N, replace = T), 
-                             levels = 0:5))
+                table(factor(sample(rep(0:(lO - 1), as.numeric(x)), N, replace = T), 
+                             levels = 0:(lO - 1)))
             })
         }
     }
-    bestidx2[, i] <- apply(tmpdatresample, 2, \(x) which.max(logged %*% x))
+    bestidx[, i] <- apply(tmpdatresample, 2, \(x) which.max(logged %*% x))
+    
+    best <- apply(tmpdatresample, 2, \(x) max(logged %*% x))
+    
+    best0 <- apply(tmpdatresample, 2, \(x) max(logged0 %*% x))
+    emplrt[, i] <- pchisq(2 * abs(best - best0), 2, lower.tail = F, log.p = F) / 2
+
+    # pois <- apply(tmpdatresample, 2, \(x) {
+    #     lambda <- mean(rep(0:(lO - 1), as.numeric(x))) + 1e-5
+    #     probs <- dpois(0:(lO-1), lambda)
+    #     sum(log(probs) * x)
+    # })
+    # lrt[, i] <- pchisq(2 * abs(best - pois), 2, lower.tail = F, log.p = F) / 2
+    # 
+    # expected <- apply(tmpdatresample, 2, \(x) {
+    #     lambda <- mean(rep(0:(lO - 1), as.numeric(x)))
+    #     exp <- N * dpois(0:(lO-1), lambda) + 0.0001
+    #     42 * exp / sum(exp)
+    # })
+    # goodness[, i] <- pchisq(colSums((tmpdatresample - expected) ^ 2 / expected), 
+    #                       lO - 2, lower.tail = F, log.p = F)
 }
-pars <- matrix(0, 2 * npars, 3)
+# write_csv(data.frame(testidx), "holding/testidx6.csv")
+# write_csv(data.frame(bestidx), "holding/bestidx6.csv")
+# write_csv(data.frame(emplrt), "holding/emplrt6.csv")
+
+# testidx <- as.matrix(read_csv("holding/testidx2.csv"))[, 1]
+# bestidx <- as.matrix(read_csv("holding/bestidx2.csv"))
+# emplrt <- as.matrix(read_csv("holding/emplrt2.csv"))
+
+retro <- matrix(0, 4 * npars, 4)
 for (i in 1:npars) {
-    idx <- 2 * (i - 1)
-    pars[2 * (i - 1) + 1:2, ] <- 
-        as.matrix(rbind(binned[testidx[i], 7:9],
-                        apply(binned[bestidx[, i], 7:9], 2, mean)))
+    retro[4 * (i - 1) + 1:4, ] <- 
+        as.matrix(rbind(slimbin[testidx[i], (lO + 1):(lO + 4)],
+                        cbind(apply(slimbin[bestidx[, i], (lO + 1):(lO + 3)], 2,
+                                \(x) c(quantile(x, 0.1), 
+                                       mean(x), 
+                                       quantile(x, 0.9))),
+                            identifiable = mean(slimbin[bestidx[, i], ]$identifiable))))
 }
-pars <- data.frame(cbind(pars[rep(c(T, F), npars), ],
-              pars[rep(c(F, T), npars), ]))
+retro <- data.frame(cbind(retro[rep(c(T, F, F, F), npars), 1:3],
+                         retro[rep(c(F, T, F, F), npars), 1:3],
+                         retro[rep(c(F, F, T, F), npars), 1:3],
+                         retro[rep(c(F, F, F, T), npars), 1:3],
+                         retro[rep(c(T, F, F, F), npars), 4],
+                         retro[rep(c(F, T, F, F), npars), 4]))
+retro <- retro %>% 
+    rename(alphaS = X1, alphaI = X2, R0 = X3,
+           alphaSlow = X4, alphaIlow = X5, R0low = X6,
+           alphaSmed = X7, alphaImed = X8, R0med = X9,
+           alphaShigh = X10, alphaIhigh = X11, R0high = X12,
+           identifiable = X13, identified = X14)
 
-# ggplot(pars, aes(x = X1, y = X4)) +
-#     geom_point(alpha = 0.5) +
-#     geom_abline(color = "red", linetype = 2) +
-#     theme_classic()
-# ggplot(pars, aes(x = X2, y = X5)) +
-#     geom_point(alpha = 0.5) +
-#     geom_abline(color = "red", linetype = 2) +
-#     theme_classic()
-# ggplot(pars, aes(x = X1*X2, y = X4*X5)) +
-#     geom_point(alpha = 0.5) +
-#     geom_abline(color = "red", linetype = 2) +
-#     theme_classic()
-# ggplot(pars, aes(x = X3, y = X6)) +
-#     geom_point(alpha = 0.5) +
-#     geom_abline(color = "red", linetype = 2) +
-#     theme_classic()
+# plotretro <- rbind(retro[sample((1:nrow(retro))[retro$R0 == 0], 10, replace = F), ],
+#       retro[retro$R0 != 0, ]) %>% 
+#     filter(identified == 1)
+plotretro <- retro %>% filter(identified == 1)
 
-pars <- pars %>% 
-    rename(alpha = X1, f = X2, R0 = X3) %>% 
-    mutate(alphaI = alpha * f,
-           alpha_se = (X4 - alpha) / X4,
-           f_se = (X5 - f) / X5,
-           R0_se = (X6 - R0) / X6) %>% 
-    arrange(-alpha_se) %>% 
-    mutate(idx = row_number())
+ggplot(plotretro, aes(x = alphaS, y = alphaSmed)) +
+    geom_point(alpha = 0.6, shape = 12) +
+    geom_linerange(aes(ymin = alphaSlow, ymax = alphaShigh),
+                    alpha = 0.15) +
+    geom_abline(color = "red", linetype = 2) +
+    theme_classic() +
+    ylab("estimate") +
+    theme(text = element_text(size = 12, family = "mono"))
+ggplot(plotretro, aes(x = alphaI, y = alphaImed)) +
+    geom_linerange(aes(ymin = alphaIlow, ymax = alphaIhigh),
+                    alpha = 0.15) +
+    geom_point(alpha = 0.6, shape = 12) +
+    scale_color_manual(values = c("grey", "black")) +
+    geom_abline(color = "red", linetype = 2) +
+    theme_classic() +
+    ylab("estimate") +
+    theme(text = element_text(size = 12, family = "mono"))
+ggplot(plotretro, aes(x = R0, y = R0med)) +
+    geom_linerange(aes(ymin = R0low, ymax = R0high),
+                    alpha = 0.15) +
+    geom_point(alpha = 0.6, shape = 12) +
+    scale_color_manual(values = c("grey", "black")) +
+    geom_abline(color = "red", linetype = 2) +
+    theme_classic() +
+    ylab("estimate") +
+    theme(text = element_text(size = 12, family = "mono"))
+ggplot(plotretro, aes(x = R0 + alphaI, y = R0med + alphaImed)) +
+    geom_linerange(aes(ymin = R0low + alphaIlow, ymax = R0high + alphaIhigh),
+                    alpha = 0.15) +
+    geom_point(alpha = 0.6, shape = 12) +
+    geom_abline(color = "red", linetype = 2) +
+    theme_classic() +
+    ylab("estimate") +
+    theme(text = element_text(size = 12, family = "mono"))
 
-pars %>% ggplot(aes(x = f, y = alpha_se)) + 
-    geom_point(shape = 3) +
-    geom_hline(yintercept = 0, color = "red", linetype = 2) +
-    theme_classic()
-pars %>% ggplot(aes(x = alpha, y = f_se)) + 
-    geom_point(shape = 3) +
-    geom_hline(yintercept = 0, color = "red", linetype = 2) +
-    theme_classic()
-pars %>% ggplot(aes(x = alpha, y = R0_se)) + 
-    geom_point(shape = 3) +
-    geom_hline(yintercept = 0, color = "red", linetype = 2) +
-    theme_classic()
+ggplot(plotretro, aes(x = alphaI, y = alphaImed, color = R0 < 3)) +
+    geom_linerange(aes(ymin = alphaIlow, ymax = alphaIhigh),
+                    alpha = 0.15) +
+    geom_point(alpha = 0.6, shape = 12) +
+    scale_color_manual(values = c("grey", "black")) +
+    geom_abline(color = "red", linetype = 2) +
+    theme_classic() +
+    ylab("estimate") +
+    theme(text = element_text(size = 12, family = "mono"))
+ggplot(plotretro, aes(x = R0, y = R0med, color = alphaI < 3)) +
+    geom_linerange(aes(ymin = R0low, ymax = R0high),
+                    alpha = 0.15) +
+    geom_point(alpha = 0.6, shape = 12) +
+    scale_color_manual(values = c("grey", "black")) +
+    geom_abline(color = "red", linetype = 2) +
+    theme_classic() +
+    ylab("estimate") +
+    theme(text = element_text(size = 12, family = "mono"))
 
-with(slimfreq, R0) %>% range
+plotretro %>% filter(R0med + alphaImed < 3) %>% 
+    ggplot(aes(x = alphaI, y = alphaImed)) +
+    geom_linerange(aes(ymin = alphaIlow, ymax = alphaIhigh),
+                    alpha = 0.15) +
+    geom_point(alpha = 0.6, shape = 12) +
+    scale_color_manual(values = c("grey", "black")) +
+    geom_abline(color = "red", linetype = 2) +
+    theme_classic() +
+    ylab("estimate") +
+    theme(text = element_text(size = 12, family = "mono"))
+plotretro %>% filter(R0med + alphaImed < 3) %>% 
+    ggplot(aes(x = R0, y = R0med)) +
+    geom_linerange(aes(ymin = R0low, ymax = R0high),
+                    alpha = 0.15) +
+    geom_point(alpha = 0.6, shape = 12) +
+    scale_color_manual(values = c("grey", "black")) +
+    geom_abline(color = "red", linetype = 2) +
+    theme_classic() +
+    ylab("estimate") +
+    theme(text = element_text(size = 12, family = "mono"))
+plotretro %>% filter(R0med + alphaImed < 3) %>% 
+    ggplot(aes(x = R0 + alphaI, y = R0med + alphaImed)) +
+    geom_linerange(aes(ymin = R0low + alphaIlow, ymax = R0high + alphaIhigh),
+                    alpha = 0.15) +
+    geom_point(alpha = 0.6, shape = 12) +
+    scale_color_manual(values = c("grey", "black")) +
+    geom_abline(color = "red", linetype = 2) +
+    theme_classic() +
+    ylab("estimate") +
+    theme(text = element_text(size = 12, family = "mono"))
 
+# plotretro %>% 
+#     filter(alphaImed + R0med < 3) %>% 
+#     ggplot(aes(x = R0med, y = alphaImed, color = R0)) +
+#     geom_point(alpha = 0.9, shape = 12) +
+#     geom_abline(slope = -1, intercept = seq(from = 0, to = 7, by = 1/2), alpha = 0.25) +
+#     theme_classic() +
+#     theme(text = element_text(size = 12, family = "mono"))
+
+data.frame(t(emplrt)) %>% 
+    mutate(is0 = ifelse(retro$R0 == 0, "R0 = 0", "R0 > 0"),
+           identified = retro$identified) %>% 
+    filter(identified == 1) %>% 
+    select(-identified) %>% 
+    pivot_longer(-is0) %>% 
+    ggplot(aes(x = value)) +
+    geom_histogram(color = "black", fill = "white") + 
+    facet_wrap(~is0) +
+    xlab("p-value") +
+    theme_classic() +
+    theme(text = element_text(size = 12, family = "mono"))
 ```
 
-alphaI 0 to 10
-alphaS 0 to 100
-R0 0 to 10
+## Proper retrodictive significance testing
+```{r}
+npars <- 900
+M <- 2
+J <- 1
+testidx <- c(sample((1:nrow(slimbin))[slimbin$R0 == 0], npars / 2, replace = F),
+             sample((1:nrow(slimbin))[slimbin$R0 != 0], npars / 2, replace = F))
+emplrt <- matrix(0, M * J, npars)
+lrt <- matrix(0, M * J, npars)
+goodness <- matrix(0, M * J, npars)
+for (i in 1:npars) {
+    print(i)
+    tmpdat <- rmultinom(M, N, slimbin[testidx[i], 1:lO])
+    tmpdatresample <- matrix(0, lO, M * J)
+    if (J == 1) { tmpdatresample <- tmpdat
+    } else {
+        for (j in 1:J) {
+            tmpdatresample[, M * (j - 1) + 1:M] <- apply(tmpdat, 2, \(x) {
+                table(factor(sample(rep(0:(lO - 1), as.numeric(x)), N, replace = T), 
+                             levels = 0:(lO - 1)))
+            })
+        }
+    }
+    
+    best <- apply(tmpdatresample, 2, \(x) max(logged %*% x))
+    
+    pois <- apply(tmpdatresample, 2, \(x) {
+        lambda <- mean(rep(0:(lO - 1), as.numeric(x)))
+        probs <- dpois(0:(lO-1), lambda) + 1e-5
+        sum(log(probs) * x)
+    })
+    best0 <- apply(tmpdatresample, 2, \(x) max(logged0 %*% x))
+    
+    lrt[, i] <- pchisq(2 * abs(best - pois), 2, lower.tail = F, log.p = F) / 2
+    emplrt[, i] <- pchisq(2 * abs(best - best0), 2, lower.tail = F, log.p = F) / 2
+    
+    expected <- apply(tmpdatresample, 2, \(x) {
+        lambda <- mean(rep(0:(lO - 1), as.numeric(x)))
+        exp <- N * dpois(0:(lO-1), lambda) + 0.0001
+        42 * exp / sum(exp)
+    })
+    goodness[, i] <- pchisq(colSums((tmpdatresample - expected) ^ 2 / expected), 
+                          lO - 2, lower.tail = F, log.p = F)
+}
+
+data.frame(t(lrt)) %>% 
+    mutate(is0 = c(rep("R0 = 0", npars / 2),
+                   rep("R0 > 0", npars / 2)),
+           R0 = slimbin$R0[testidx]) %>% 
+    pivot_longer(-c(is0, R0)) %>% 
+    ggplot(aes(x = value)) +
+    geom_histogram() + 
+    facet_wrap(~is0) +
+    theme_classic()
+data.frame(t(emplrt)) %>% 
+    mutate(is0 = c(rep("R0 = 0", npars / 2),
+                   rep("R0 > 0", npars / 2)),
+           R0 = slimbin$R0[testidx]) %>% 
+    pivot_longer(-c(is0, R0)) %>% 
+    ggplot(aes(x = value)) +
+    geom_histogram() + 
+    facet_wrap(~is0) +
+    theme_classic()
+data.frame(t(goodness)) %>% 
+    mutate(is0 = c(rep("R0 = 0", npars / 2),
+                   rep("R0 > 0", npars / 2)),
+           R0 = slimbin$R0[testidx]) %>% 
+    pivot_longer(-c(is0, R0)) %>% 
+    ggplot(aes(x = value)) +
+    geom_histogram() + 
+    facet_wrap(~is0) +
+    theme_classic()
+
+data.frame(t(emplrt)) %>% 
+    mutate(is0 = c(rep("R0 = 0", npars / 2),
+                   rep("R0 > 0", npars / 2)),
+           R0 = slimbin$R0[testidx]) %>% 
+    pivot_longer(-c(is0, R0)) %>% 
+    group_by(R0) %>% 
+    summarize(call = mean(value < 0.05)) %>% 
+    ggplot(aes(x = R0, y = call)) +
+    geom_point() + 
+    theme_classic()
+
+freqs[sample((1:nrow(freqs))[!is.na(freqs$X1)], 1000, replace = F), (O+1):(O+3)] %>% pairs
+```
+
+```{r}
+taxon <- "family"
+tmphost <- hostdat %>%
+    mutate(subject = str_split(host_id, "_", simplify = T)[, 1]) %>% 
+    group_by(subject, .data[[taxon]]) %>% 
+    summarize(n = n(), family = family[1])
+tmphost %>% 
+    summarize(N = sum(n)) %>% 
+    right_join(tmphost, by = "subject") %>% 
+    mutate(freq = n / N) %>% 
+    group_by(.data[[taxon]]) %>% 
+    mutate(avg = mean(freq)) %>% 
+    ungroup %>% 
+    arrange(freq) %>% 
+    mutate(idx = row_number()) %>% 
+    mutate(taxon = factor(.data[[taxon]], levels = unique(.data[[taxon]]))) %>% 
+    ggplot(aes(x = idx, y = freq)) +
+    geom_point(size = 0.5, alpha = 0.25) +
+    theme_classic() +
+    xlab(taxon) + ylab("frequency") +
+    theme(axis.text.x = element_blank(),
+          axis.ticks.x = element_blank()) +
+    theme(text = element_text(size = 12, family = "mono"))
+
+```
