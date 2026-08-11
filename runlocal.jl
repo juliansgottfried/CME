@@ -5,10 +5,6 @@ using JLD2, DelimitedFiles
 f = 0:0.01:0.99
 R0 = 0:0.1:9.9
 
-α = 10:11
-f = 0:1
-R0 = 5:6
-
 J = 200
 G = 7000
 inter = 100
@@ -16,20 +12,19 @@ nbin = 50
 nN = 168
 
 for i in eachindex(R0)
-    i = 1
+    i = 89
     counts = zeros(Int, nbin * nN, length(f) * length(α))
     for j in eachindex(α)
         for k in eachindex(f)
-            j = 1
-            k = 1
             println("i: $i, j: $j, k: $k")
-            all = sim.replication(J, G, inter, nN, α[j], f[k], R0[i])
-            all[all .> nbin - 1] .= nbin - 1
-            all .+= 1
+            # all = sim.replication(J, G, inter, nN, α[j], f[k], R0[i])
+            # all[all .> nbin - 1] .= nbin - 1
+            # all .+= 1
             for u in 1:nN
-                [counts[nbin * (u - 1) + l, length(f) * (j - 1) + k] += 1 for l in all[u, :]]
+                # [counts[nbin * (u - 1) + l, length(f) * (j - 1) + k] += 1 for l in all[u, :]]
+                [counts[nbin * (u - 1) + l, length(f) * (j - 1) + k] += 1 for l in ones(Int, 100)]
             end
         end
     end
-    writedlm("/scratch/users/jgottf/CME/JLresults7/counts_$i.csv", counts, ',')
+    writedlm("JLresults/counts_$i.csv", counts, ',')
 end
