@@ -5,3 +5,4 @@ retrodiction
 output
 *.csv
 holding
+tmpdir
