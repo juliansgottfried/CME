@@ -1,4 +1,4 @@
-module sim
+module Sim
 
 function iterate(g, S, I, α, f, R0)
     FOI = R0 * S * I / (S + I)
@@ -16,11 +16,11 @@ function iterate(g, S, I, α, f, R0)
     (g, S, I)
 end
 
-function loop!(Is, nN, G, inter, α, f, R0)
+function loop!(Is, nN, G, inter, t, α, f, R0)
+    g = 0
     S = 25
     I = 0
-    g = 0
-    t = zeros(Int, nN)
+    t .= 0
     while g < G
         N = S + I
         if N > 0 & N <= nN
@@ -33,15 +33,13 @@ function loop!(Is, nN, G, inter, α, f, R0)
     end
 end    
 
-function replication(J, G, inter, nN, α, f, R0)
-    len = Int(G / inter)
-    all = zeros(Int, nN, J * len)
+function replication!(all, J, G, inter, nN, len, t, α, f, R0)
+    all .= 0
     for j in 1:J
         idx = len * (j - 1) + 1
         @views loop!(all[:, idx:(idx + len - 1)],
-            nN, G, inter, α, f, R0)
+            nN, G, inter, t, α, f, R0)
     end
-    all
 end
 
 end

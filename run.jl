@@ -26,10 +26,13 @@ addprocs(SlurmManager())
 
 pmap(eachindex(R0)) do i
     counts = zeros(Int, nbin * nN, length(f) * length(α))
+    len = Int(G / inter)
+    all = zeros(Int, nN, J * len)
+    t = zeros(Int, nN)
     for j in eachindex(α)
         for k in eachindex(f)
             println("i: $i, j: $j, k: $k")
-            all = sim.replication(J, G, inter, nN, α[j], f[k], R0[i])
+            Sim.replication!(all, J, G, inter, nN, len, t, α[j], f[k], R0[i])
             all[all .> nbin - 1] .= nbin - 1
             all .+= 1
             for u in 1:nN
