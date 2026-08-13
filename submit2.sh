@@ -10,4 +10,4 @@ sbatch \
     --partition=normal,hns \
     --mail-type=ALL \
     --mail-user=juliansgottfried@gmail.com \
-    /scratch/users/jgottf/CME/run.jl
+    /scratch/users/jgottf/CME/run2.jl
