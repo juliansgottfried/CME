@@ -19,7 +19,7 @@ nN = 168
     for j in eachindex(α)
         for k in eachindex(f)
             println("i: $i, j: $j, k: $k")
-            # Sim.replication!(all, J, G, inter, nN, len, t, α[j], f[k], R0[i])
+            Sim.replication!(all, J, G, inter, nN, len, t, α[1], f[1], R0[1])
             all[all .> nbin - 1] .= nbin - 1
             all .+= 1
             for u in 1:nN

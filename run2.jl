@@ -8,7 +8,7 @@ addprocs(SlurmManager())
 
 @everywhere α = [3; 9:16; 26; 28; 30; 33; 58:67; 69:80; 84:89; 91:94; 96:97]
 @everywhere f = 0:0.01:0.99
-@everywhere R0 = 0
+@everywhere R0 = 0:0.1:0.3
 
 @everywhere J = 200
 @everywhere G = 7000
@@ -24,7 +24,7 @@ pmap(eachindex(R0)) do i
     for j in eachindex(α)
         for k in eachindex(f)
             println("i: $i, j: $j, k: $k")
-            # Sim.replication!(all, J, G, inter, nN, len, t, α[j], f[k], R0[i])
+            Sim.replication!(all, J, G, inter, nN, len, t, α[1], f[1], R0[1])
             all[all .> nbin - 1] .= nbin - 1
             all .+= 1
             for u in 1:nN
