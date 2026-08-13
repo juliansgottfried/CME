@@ -3,10 +3,6 @@ import StatsBase, DelimitedFiles
 
 α = [3; 9:16; 26; 28; 30; 33; 58:67; 69:80; 84:89; 91:94; 96:97]
 f = 0:0.01:0.99
-R0 = 0:0.1:9.9
-
-α = 30:33
-f = 0:1
 R0 = 0
 
 J = 200
@@ -23,7 +19,7 @@ nN = 168
     for j in eachindex(α)
         for k in eachindex(f)
             println("i: $i, j: $j, k: $k")
-            Sim.replication!(all, J, G, inter, nN, len, t, α[j], f[k], R0[i])
+            # Sim.replication!(all, J, G, inter, nN, len, t, α[j], f[k], R0[i])
             all[all .> nbin - 1] .= nbin - 1
             all .+= 1
             for u in 1:nN
