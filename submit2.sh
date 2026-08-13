@@ -1,8 +1,8 @@
 ml julia
 
 sbatch \
-    --nodes=2 \
-    --ntasks-per-node=2 \
+    --ntasks=4 \
+    --cpus-per-task=1 \
     --mem-per-cpu=1G \
     --time=00:05:00 \
     --output=/scratch/users/jgottf/CME/output/%j.out \
