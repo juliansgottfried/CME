@@ -1,9 +1,9 @@
 ml julia
 
 sbatch \
-    --nodes=5 \
-    --ntasks-per-node=20 \
-    --mem=24G \
+    --nodes=1 \
+    --ntasks-per-node=1 \
+    --mem=20G \
     --time=12:00:00 \
     --output=/scratch/users/jgottf/CME/output/%j.out \
     --error=/scratch/users/jgottf/CME/output/%j.out \

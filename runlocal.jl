@@ -7,7 +7,7 @@ R0 = 0:0.1:9.9
 
 α = 0:1
 f = 0:1
-R0 = 0:1
+R0 = 0
 
 J = 200
 G = 7000
@@ -31,5 +31,5 @@ for i in eachindex(R0)
             end
         end
     end
-    writedlm("JLresultstmp/counts_$i.csv", counts, ',')
+    # writedlm("JLresultstmp/counts_$i.csv", counts, ',')
 end

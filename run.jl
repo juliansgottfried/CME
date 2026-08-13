@@ -16,7 +16,8 @@ addprocs(SlurmManager())
 
 @everywhere α = [3; 9:16; 26; 28; 30; 33; 58:67; 69:80; 84:89; 91:94; 96:97]
 @everywhere f = 0:0.01:0.99
-@everywhere R0 = 0:0.1:9.9
+# @everywhere R0 = 0:0.1:9.9
+@everywhere R0 = 0
 
 @everywhere J = 200
 @everywhere G = 7000
