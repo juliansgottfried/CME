@@ -3,7 +3,7 @@ ml julia
 sbatch \
     --nodes=1 \
     --ntasks-per-node=10 \
-    --mem=8G \
+    --mem=4G \
     --time=00:15:00 \
     --output=/scratch/users/jgottf/CME/output/%j.out \
     --error=/scratch/users/jgottf/CME/output/%j.out \
