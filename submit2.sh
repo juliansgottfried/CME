@@ -3,8 +3,8 @@ ml julia
 sbatch \
     --nodes=2 \
     --ntasks-per-node=2 \
-    --mem=1G \
-    --time=00:03:00 \
+    --mem-per-cpu=1G \
+    --time=00:05:00 \
     --output=/scratch/users/jgottf/CME/output/%j.out \
     --error=/scratch/users/jgottf/CME/output/%j.out \
     --partition=normal,hns \
