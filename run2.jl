@@ -40,5 +40,6 @@ pmap(eachindex(R0)) do i
             end
         end
     end
+    println(isa(counts, Array))
     DelimitedFiles.writedlm("/scratch/users/jgottf/CME/tmpdir/counts_$i.csv", counts, ',')
 end
