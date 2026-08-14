@@ -14,7 +14,7 @@ addprocs(SlurmManager())
 # @everywhere αI = 0:0.1:9.9
 # @everywhere R0 = 0:0.1:9.9
 
-@everywhere α = [3; 9:16; 26; 28; 30; 33; 58:67; 69:80; 84:89; 91:94; 96:97]
+@everywhere α = [3; 9:16; 26]
 @everywhere f = 0:0.01:0.99
 @everywhere R0 = 0:0.1:9.9
 
@@ -32,7 +32,7 @@ pmap(eachindex(R0)) do i
     for j in eachindex(α)
         for k in eachindex(f)
             println("i: $i, j: $j, k: $k")
-            Sim.replication!(all, J, G, inter, nN, len, t, α[1], f[1], R0[1])
+            Sim.replication!(all, J, G, inter, nN, len, t, α[j], f[k], R0[i])
             all[all .> nbin - 1] .= nbin - 1
             all .+= 1
             for u in 1:nN
@@ -40,5 +40,5 @@ pmap(eachindex(R0)) do i
             end
         end
     end
-    DelimitedFiles.writedlm("/scratch/users/jgottf/CME/tmpdir/counts_$i.csv", counts, ',')
+    DelimitedFiles.writedlm("/scratch/users/jgottf/CME/JLresults7/counts_$i.csv", counts, ',')
 end
