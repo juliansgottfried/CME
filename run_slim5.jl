@@ -6,7 +6,7 @@ addprocs(SlurmManager())
 @everywhere include("/scratch/users/jgottf/CME/sim.jl")
 @everywhere import StatsBase, DelimitedFiles
 
-@everywhere α = [89; 91:94; 96:97]
+@everywhere α = [89; 91:94]
 @everywhere f = 0:0.01:0.99
 @everywhere R0 = 0:0.1:9.9
 
