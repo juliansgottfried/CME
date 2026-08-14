@@ -6,15 +6,8 @@ addprocs(SlurmManager())
 @everywhere include("/scratch/users/jgottf/CME/sim.jl")
 @everywhere import StatsBase, DelimitedFiles
 
-# @everywhere α = 0:1:99
-# @everywhere f = 0:0.005:0.495
-# @everywhere R0 = 0:0.1:9.9
-
-# @everywhere αS = 0:1:99
-# @everywhere αI = 0:0.1:9.9
-# @everywhere R0 = 0:0.1:9.9
-
 @everywhere α = [3; 9:16; 26]
+# @everywhere α = [28; 30; 33; 58:64]
 @everywhere f = 0:0.01:0.99
 @everywhere R0 = 0:0.1:9.9
 
@@ -24,7 +17,7 @@ addprocs(SlurmManager())
 @everywhere nbin = 50
 @everywhere nN = 168
 
-pmap(eachindex(R0)) do i
+pmap([73; 74; 88]) do i
     counts = zeros(Int, nbin * nN, length(f) * length(α))
     len = Int(G / inter)
     all = zeros(Int, nN, J * len)
