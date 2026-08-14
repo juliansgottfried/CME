@@ -1,7 +1,7 @@
 ml julia
 
 sbatch \
-    --ntasks=1 \
+    --ntasks=100 \
     --cpus-per-task=1 \
     --mem-per-cpu=2G \
     --time=00:02:00 \
