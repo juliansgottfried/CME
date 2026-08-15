@@ -16,7 +16,7 @@ addprocs(SlurmManager())
 @everywhere nbin = 50
 @everywhere nN = 168
 
-pmap([59; 67; 69:70; 72:74; 84; 91; 96:98]) do i
+pmap(eachindex(R0)) do i
     counts = zeros(Int, nbin * nN, length(f) * length(α))
     len = Int(G / inter)
     all = zeros(Int, nN, J * len)
@@ -33,5 +33,5 @@ pmap([59; 67; 69:70; 72:74; 84; 91; 96:98]) do i
         end
     end
     println(isa(counts, Array))
-    DelimitedFiles.writedlm("/scratch/users/jgottf/CME/tmpdir5/counts_$i.csv", counts, ',')
+    DelimitedFiles.writedlm("/scratch/users/jgottf/CME/tmpdir6/counts_$i.csv", counts, ',')
 end
