@@ -162,9 +162,9 @@ cmetab %>%
     theme_classic()
 
 cmedat <- cmemat %>% 
-    group_by(subject, genome) %>% 
+    group_by(subject, species) %>% 
     summarize_at(cmes, \(x) sum(x) != 0) %>% 
-    select(-genome) %>% 
+    select(-species) %>% 
     pivot_longer(cols = -subject, names_to = "cme") %>% 
     group_by(cme, subject) %>% 
     summarize(count = sum(value), .groups = "drop")
@@ -252,8 +252,7 @@ hist(pvals)
 cmemat %>% filter(c4) %>% select(subject, species) %>% group_by(subject) %>% 
     distinct %>% pull(species) %>% length
 
-
-
+# get alpha from data
 store <- matrix(0, length(cmes), 2)
 for (i in 1:length(cmes)) {
     fams <- cmemat %>% filter(.[[cmes[i]]]) %>% pull(family) %>% unique
@@ -270,7 +269,105 @@ hist(store[, 1], breaks = 20)
 hist(round(store[, 1], 0), breaks = 20)
 length(unique(round(store[, 1], 0)))
 
-sort(unique(store[, 2]))
+alpha <- sort(unique(round(store[, 1], 0)))
+alphaidx <- list(tmp1 = alpha[1:10],
+                       tmp2 = alpha[11:20],
+                       tmp3 = alpha[21:30],
+                       tmp4 = alpha[31:40],
+                       tmp5 = alpha[41:45])
+```
+
+## Load new simulations
+```{r}
+R0 <- seq(from = 0, to = 9.9, by = 0.1)
+f <- seq(from = 0, to = 0.99, by = 0.01)
+
+for (i in 41:45) {
+    counts <- NULL
+    alphacol <- (1:5)[unlist(lapply(alphaidx, \(x) ifelse(alpha[i] %in% x, T, F)))]
+    dirname <- paste0("tmpdir", alphacol)
+    for (j in 1:100) {
+        print(paste0(i," ",j))
+        countstmp <- data.frame(t(read.table(paste0(dirname, "/counts_",j,".csv"), sep=",")))
+        pars <- matrix(0, nrow = nrow(countstmp), ncol = 3)
+        pars[, 1] <- 0
+        pars[, 2] <- 0
+        pars[, 3] <- R0[j]
+        tmpalpha <- alphaidx[[alphacol]]
+        for (k in 1:length(tmpalpha)) {
+            for (l in 1:100) {
+                idx <- 100 * (k - 1) + l
+                pars[idx, 1] <- tmpalpha[k]
+                pars[idx, 2] <- f[l]
+            }
+        }
+        keepidx <- pars[, 1] == alpha[i]
+        countstmp <- countstmp[keepidx, ]
+        pars <- pars[keepidx, ]
+        
+        stacked <- matrix(0, 100*168, 50)
+        for (k in 1:168) {
+            stacked[100*(k-1) + (1:100), ] <- as.matrix(countstmp[, 50*(k-1) + (1:50)])
+        }
+        stacked <- data.frame(stacked)
+        stacked$N <- rep(1:168, each = 100)
+        stacked$alpha <- rep(pars[, 1], times = 168)
+        stacked$f <- rep(pars[, 2], times = 168)
+        stacked$R0 <- rep(pars[, 3], times = 168)
+        
+        counts <- rbind(counts, stacked)
+    }
+    write_csv(counts, paste0("alpharesults/alpha_", i, ".csv"))
+}
+```
+
+# new fitting
+```{r}
+fits <- data.frame(cme = cmes, alpha = round(store[, 1], 0), f = 0, R0 = 0,
+                   loglik = -Inf, idx = 0)
+for (i in 1:length(cmes)) {
+    print(i)
+    fams <- cmemat %>% filter(.[[cmes[i]]]) %>% pull(family) %>% unique
+    Nstats <- cmemat %>% 
+        filter(family %in% fams) %>% 
+        group_by(subject) %>% 
+        select(subject, species) %>%
+        distinct %>% 
+        summarize(N = n())
+    Istats <- cmemat %>% filter(.[[cmes[i]]]) %>% group_by(subject, species) %>% 
+        summarize(n = n()) %>% summarize(I = n())
+    
+    statistics <- left_join(Nstats, Istats, by = "subject")
+    statistics[is.na(statistics)] <- 0
+    
+    counts <- read_csv(paste0("alpharesults/alpha_",
+                              which(alpha == min(fits$alpha[i], 94)),
+                              ".csv"))
+    counts[, 1:O] <- counts[, 1:O] + 1 / 10
+    rowsums <- rowSums(counts[, 1:O])
+    counts[, 1:O] <- counts[, 1:O] %>% 
+        mutate_all(\(x) x / rowsums)
+    
+    factor <- 0
+    loglik <- rep(0, 100*100)
+    for (j in unique(statistics$N)) {
+        slimdata <- statistics %>% filter(N == j)
+        slimI <- as.numeric(unname(table(factor(slimdata$I, levels = 0:(O-1)))))
+        factor <- factor + log(factorial(sum(slimI))) - sum(log(factorial(slimI)))
+        
+        slimfreq <- counts %>% filter(N == j)
+        loglik <- loglik + apply(slimfreq[, 1:O], 1, \(x) sum(slimI * log(x)))
+    }
+    idx <- which.max(loglik)
+    fits[i, 3:6] <- c(slimfreq$f[idx], slimfreq$R0[idx],
+                      factor + max(loglik), idx)
+}
+write_csv(fits, "conditional_fits.csv")
+
+fits %>% 
+    ggplot(aes(x = R0)) +
+    geom_histogram() +
+    theme_classic()
 
 ```
 
@@ -435,7 +532,11 @@ cmedat %>%
     theme(text=element_text(size=12,family="mono"),
           legend.position = "bottom")
 
-round(N * slimbin[fits$idx[fits$cme == tester], 1:O], 1) %>% 
+
+slimbin <- read_csv(paste0("alpharesults/alpha_",
+                              which(alpha == min(fits$alpha[fits$cme == tester], 94)),
+                              ".csv"))
+round(N * slimbin[fits$idx[fits$cme == tester] + 100*50, 1:O], 1) %>% 
     pivot_longer(everything(), 
                  names_to = "count", 
                  values_to="freq") %>% 
