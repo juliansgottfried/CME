@@ -1,0 +1,322 @@
+---
+title: "fitting2"
+author: "Julian Gottfried"
+date: "2026-08-21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Setup
+```{r}
+library(tidyverse)
+setwd("~/Desktop/CME")
+```
+
+## Functions
+```{r}
+singlerun <- function(alpha, f, R0, G, S, I) {
+    Ss <- matrix(0, nrow = 168, ncol = G)
+    Is <- matrix(0, nrow = 168, ncol = G)
+    t <- rep(0, 168)
+    g <- 0
+    
+    while (g < G) {
+        pop = S + I
+        if (pop > 0 & pop <= 168) {
+            if (g >= t[pop]) {
+                t[pop] <- t[pop] + 1
+                Ss[pop, t[pop]] <- S
+                Is[pop, t[pop]] <- I
+            }
+        }
+        if (S + I == 0) { foi = 0
+        } else {foi <- R0 * S * I / (S + I)}
+        rate <- alpha + foi + S + I
+        g <- g - 1 / rate * log(1 - runif(1))
+        pick <- runif(1)
+        if (pick < alpha * (1 - f) / rate) { S <- S + 1
+        } else if (pick < alpha / rate) { I <- I + 1
+        } else if (pick < (alpha + foi) / rate) { 
+            S <- S - 1
+            I <- I + 1
+        } else if (pick < (alpha + foi + S) / rate) { S <- S - 1
+        } else {I <- I - 1}
+    }
+    list(Ss, Is)
+}
+
+fitting <- function(statistics, counts) {
+    factor <- 0
+    loglik <- rep(0, 100*100)
+    for (j in unique(statistics$N)) {
+        if (j == 0) next
+        slimdata <- statistics %>% filter(N == j)
+        slimI <- as.numeric(unname(table(factor(slimdata$I, levels = 0:(O-1)))))
+        factor <- factor + log(factorial(sum(slimI))) - sum(log(factorial(slimI)))
+        slimfreq <- counts %>% filter(N == j)
+        loglik <- loglik + apply(slimfreq[, 1:O], 1, \(x) sum(slimI * log(x)))
+    }
+    
+    # https://journals.sagepub.com/doi/pdf/10.1177/1536867X0700700305
+    
+    hat <- which.max(loglik)
+    
+    profiledf <- sapply(f, \(x) max(loglik[round(slimfreq$f, 2) == round(x, 2)]))
+    finterval <- 2 * (max(loglik) - profiledf) <= qchisq(0.89, 1)
+    finterval <- quantile(f[finterval], c(0.055, 0.5, 0.945))
+    
+    profiledR0 <- sapply(R0, \(x) max(loglik[round(slimfreq$R0, 2) == round(x, 2)]))
+    R0interval <- 2 * (max(loglik) - profiledR0) <= qchisq(0.89, 1)
+    R0interval <- quantile(R0[R0interval], c(0.055, 0.5, 0.945))
+    
+    returner <- rep(0, 10)
+    
+    returner[1] <- slimfreq$f[hat]
+    returner[2] <- finterval[1]
+    returner[3] <- finterval[2]
+    returner[4] <- finterval[3]
+    
+    returner[5] <- slimfreq$R0[hat]
+    returner[6] <- R0interval[1]
+    returner[7] <- R0interval[2]
+    returner[8] <- R0interval[3]
+    
+    returner[9] <- pchisq(2 * (max(loglik) - max(loglik[slimfreq$R0 == 0])), 
+                            1, lower.tail = F, log.p = F) / 2
+    
+    returner[10] <- max(loglik)
+    
+    returner
+}
+```
+
+## Hyperparams
+```{r}
+N <- 42
+O <- 50
+
+f <- seq(from = 0, to = 0.99, by = 0.01)
+R0 <- seq(from = 0, to = 9.9, by = 0.1)
+```
+
+## CME data
+```{r}
+cmemat <- read.table("eitan_data/host_cme_matrix.txt", header = T, sep = "\t")
+cmes <- colnames(cmemat %>% select(-host_id))
+cmemat$aid <- str_split(cmemat$host_id, "_", simplify = T)[, 1]
+cmemat$genome <- str_split(cmemat$host_id, "_", simplify = T)[, 2]
+hostdat <-  read.table("eitan_data/hosts.txt", header = T, sep = "\t")
+cmemat <- left_join(cmemat, hostdat %>% select(species, genus, family, host_id), by = "host_id")
+cmetab <- read.table("eitan_data/cme_table.txt", header = T, sep = "\t")
+cmedat <- cmemat %>% 
+    group_by(aid, species) %>% 
+    summarize_at(cmes, \(x) sum(x) != 0) %>% 
+    select(-species) %>% 
+    pivot_longer(cols = -aid, names_to = "cme") %>% 
+    group_by(cme, aid) %>% 
+    summarize(count = sum(value), .groups = "drop")
+```
+
+## N and I data
+```{r}
+NI <- data.frame(matrix(0, N * length(cmes), 3))
+colnames(NI) <- c("cme","N","I")
+for (i in 1:length(cmes)) {
+    print(i)
+    fams <- cmemat %>% filter(.[[cmes[i]]]) %>% pull(family) %>% unique
+    Nstats <- suppressMessages(cmemat %>% 
+        filter(family %in% fams) %>% 
+        group_by(aid) %>% 
+        select(aid, species) %>%
+        distinct %>% 
+        summarize(N = n()))
+    Istats <- suppressMessages(cmemat %>% filter(.[[cmes[i]]]) %>% group_by(aid, species) %>% 
+        summarize(n = n()) %>% summarize(I = n()))
+    statistics <- left_join(Nstats, Istats, by = "aid")
+    statistics <- rbind(statistics,
+                        data.frame(aid = unique(hostdat$aid), N = 0, I = NA)[!(unique(hostdat$aid) %in% statistics$aid), ])
+    statistics[is.na(statistics)] <- 0
+    NI[N * (i - 1) + (1:N), ] <- statistics %>% mutate(cme = cmes[i]) %>% select(cme, N, I)
+}
+```
+
+## Estimate alpha
+```{r}
+alphas <- NI %>% group_by(cme) %>% summarize(alpha = round(mean(N, 0)))
+alphalist <- sort(unique(alphas$alpha))
+# alphaidx <- list(tmp1 = alphalist[1:10],
+#                  tmp2 = alphalist[11:20],
+#                  tmp3 = alphalist[21:30],
+#                  tmp4 = alphalist[31:40],
+#                  tmp5 = alphalist[41:45])
+```
+
+## Retrodiction: setup
+```{r}
+testalpha <- 59
+testcounts <- read_csv(paste0("alpharesults/alpha_", which(alphalist == testalpha),".csv"))
+testcounts[, 1:O] <- testcounts[, 1:O] + 1 / 10
+rowsums <- rowSums(testcounts[, 1:O])
+testcounts[, 1:O] <- testcounts[, 1:O] %>% 
+    mutate_all(\(x) x / rowsums)
+
+condN <- rpois(N, testalpha)
+samplepars <- rbind(testcounts %>% filter(R0 == 0, f <= 0.5) %>% select(f, R0) %>% sample_n(100),
+                    testcounts %>% filter(R0 > 0, R0 < 5, f <= 0.5) %>% select(f, R0) %>% sample_n(100))
+```
+
+## Retrodiction: fitting
+```{r}
+testret <- matrix(0, nrow=200, ncol=10)
+for (i in 1:200) {
+    print(i)
+    sim <- apply((testcounts %>% filter(f == samplepars[i, ]$f, R0 == samplepars[i, ]$R0))[condN, 1:O],
+                 1, \(x)  which.max(rmultinom(1, 1, x)) - 1)
+    statistics <- data.frame(N = condN, I = sim)
+    
+    testret[i, ] <- fitting(statistics, testcounts)
+}
+```
+
+## Retrodiction: viz
+```{r}
+explore <- data.frame(cbind(testret, samplepars))
+colnames(explore)[1:10] <- c("fhat","fl","fm","fu","R0hat","R0l","R0m","R0u","pval","loglik")
+
+explore %>% 
+    ggplot(aes(x = R0, y = R0m)) +
+    geom_linerange(aes(ymin = R0l, ymax = R0u), alpha = 0.15) +
+    geom_point(alpha = 0.9, shape = 1) +
+    geom_abline(color = "red", linetype = 2) +
+    theme_classic() +
+    ylab("estimate") +
+    theme(text = element_text(size = 12, family = "mono"))
+
+explore %>% 
+    ggplot(aes(x = f, y = fm)) +
+    geom_linerange(aes(ymin = fl, ymax = fu), alpha = 0.15) +
+    geom_point(alpha = 0.9, shape = 1) +
+    geom_abline(color = "red", linetype = 2) +
+    theme_classic() +
+    ylab("estimate") +
+    theme(text = element_text(size = 12, family = "mono"))
+
+explore %>%
+    mutate(is0 = ifelse(R0 == 0, "R0 = 0", "R0 > 0")) %>% 
+    ggplot(aes(x = pval)) +
+    geom_histogram() +
+    geom_histogram(color = "black", fill = "white") + 
+    facet_wrap(~is0) +
+    xlab("p-value") +
+    theme_classic() +
+    theme(text = element_text(size = 12, family = "mono"))
+```
+
+## CME fitting
+```{r}
+fits <- data.frame(cme = cmes, 
+                   fhat = 0, fl = 0, fm = 0, fu = 0,
+                   R0hat = 0, R0l = 0, R0m = 0, R0u = 0,
+                   pval = 1,
+                   loglik = -Inf)
+idx <- 1
+for (i in 1:45) {
+    tmpalpha <- alphalist[i]
+    counts <- suppressMessages(read_csv(paste0("alpharesults/alpha_", i, ".csv")))
+    counts[, 1:O] <- counts[, 1:O] + 1 / 10
+    divider <- rowSums(counts[, 1:O])
+    counts[, 1:O] <- apply(counts[, 1:O], 2, \(x) x / divider)
+    
+    if (i == 45) { tmpcmes <- alphas$cme[alphas$alpha >= tmpalpha]
+    } else tmpcmes <- alphas$cme[alphas$alpha == tmpalpha]
+    
+    for (j in 1:length(tmpcmes)) {
+        print(idx)
+        tmpNI <- NI %>% filter(cme == tmpcmes[j])
+        fits[idx, ] <- c(tmpcmes[j], fitting(tmpNI, counts))
+        idx <- idx + 1
+    }
+}
+write_csv(fits, "newfits.csv")
+```
+
+## Viz
+```{r}
+fits <- fits %>% 
+    mutate(across(-cme, as.numeric))
+
+fits %>% 
+    arrange(-R0m) %>% 
+    mutate(cme = row_number(), sig = pval >= 0.05) %>% 
+    ggplot(aes(x = cme, y = R0m, color = sig)) +
+    geom_linerange(aes(ymin = R0l, ymax = R0u), alpha = 0.15) +
+    geom_point(alpha = 0.8, shape = 3) +
+    scale_color_manual(name = "",
+                       labels = c("significant","non-significant"),
+                       values = c("#5e0019", "#9590d6")) +
+    theme_classic() +
+    ylab("R0") +
+    theme(text = element_text(size = 12, family = "mono"))
+
+fits %>% 
+    arrange(-fm) %>% 
+    mutate(cme = row_number()) %>% 
+    ggplot(aes(x = cme, y = fm)) +
+    geom_linerange(aes(ymin = fl, ymax = fu), alpha = 0.15) +
+    geom_point(alpha = 0.8, shape = 3) +
+    theme_classic() +
+    ylab("f") +
+    theme(text = element_text(size = 12, family = "mono"))
+
+fits %>% 
+    arrange(-pval) %>% 
+    mutate(cme = row_number()) %>% 
+    ggplot(aes(x = cme, y = pval)) +
+    geom_point(alpha = 0.8, shape = 3) +
+    geom_hline(yintercept = 0.05, color = "red", linetype = 2) +
+    theme_classic() +
+    ylab("p-value") +
+    theme(text = element_text(size = 12, family = "mono"))
+```
+
+## Examining specific CMEs
+```{r}
+tester <- "c4"
+parfit <- fits[fits$cme == tester, c("fm", "R0m")]
+testcounts <- read_csv(paste0("alpharesults/alpha_",
+                          which(alphalist == min(alphas$alpha[alphas$cme == tester], 94)),
+                          ".csv"))
+testcounts <- testcounts %>% filter(f == round(parfit$fm, 2), R0 == round(parfit$R0m, 1))
+gatherNI <- colSums(testcounts[NI[NI$cme == tester, "N"], ])
+gatherNI <- gatherNI / sum(gatherNI)
+
+cmedat %>%
+    filter(cme == tester) %>%
+    pull(count) %>% 
+    factor(levels = 0:(O-1)) %>% 
+    table %>% 
+    data.frame %>% 
+    rename(count = '.', freq = Freq) %>% 
+    mutate(count = as.numeric(count) - 1, 
+           freq = freq / sum(freq)) %>% 
+    ggplot(aes(x = count, y = freq)) +
+    geom_col(width = 1, color = "black", fill = "white")+
+    ylim(0, 1) + xlim(-1, 51) +
+    theme_classic() +
+    ggtitle(tester) +
+    theme(text = element_text(size = 12, family = "mono"),
+          legend.position = "bottom")
+
+data.frame(count = 0:(O - 1), freq = gatherNI[1:O]) %>% 
+    ggplot(aes(x = count, y = freq)) +
+    geom_col(width = 1, color = "black", fill = "white")+
+    ylim(0, 1) + xlim(-1, 51) +
+    theme_classic() +
+    ggtitle("best fit") +
+    theme(text = element_text(size = 12, family = "mono"),
+          legend.position = "bottom")
+```
+

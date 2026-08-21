@@ -98,7 +98,7 @@ write_csv(counts, "results2.csv")
 
 ## Convert counts
 ```{r}
-counts <- read_csv("results2.csv")
+counts <- read_csv("results.csv")
 freqs <- counts
 pseudo <- 1 / 10
 freqs[, 1:O] <- freqs[, 1:O] + pseudo
@@ -269,12 +269,19 @@ hist(store[, 1], breaks = 20)
 hist(round(store[, 1], 0), breaks = 20)
 length(unique(round(store[, 1], 0)))
 
-alpha <- sort(unique(round(store[, 1], 0)))
-alphaidx <- list(tmp1 = alpha[1:10],
-                       tmp2 = alpha[11:20],
-                       tmp3 = alpha[21:30],
-                       tmp4 = alpha[31:40],
-                       tmp5 = alpha[41:45])
+alpha <- rep(0, length(cmes))
+for (i in 1:length(cmes)) {
+    fams <- cmemat %>% filter(.[[cmes[i]]]) %>% pull(family) %>% unique
+    alpha[i] <- cmemat %>% 
+        filter(family %in% fams) %>% 
+        group_by(subject) %>% 
+        select(subject, species) %>%
+        distinct %>% 
+        summarize(n = n()) %>% 
+        pull(n) %>% 
+        mean
+}
+alpha <- data.frame(alpha = round(alpha, 0), cme = cmes)
 ```
 
 ## Load new simulations
@@ -428,6 +435,25 @@ write_csv(fits, "fits_slim.csv")
 fits <- read_csv("fits_slim.csv")
 ```
 
+## Do fitting without alpha
+```{r}
+pars <- freqs %>% select(alpha:R0)
+fits <- data.frame(cme = cmes, idx = 0, loglik = -Inf)
+for (i in 1:length(cmes)) {
+    print(i)
+    tmpalpha <- alpha$alpha[alpha$cme == cmes[i]]
+    tmpdat <- cmedat %>% filter(cme == cmes[i]) %>% pull(count)
+    tmpdat <- as.numeric(unname(table(factor(tmpdat, levels = 0:(O-1)))))
+    factor <- log(factorial(N) / prod(factorial(tmpdat)))
+    loglik <- rowSums(sweep(log(freqs[freqs$alpha == tmpalpha, 1:O]), 
+                            2, tmpdat, FUN = "*"))
+    fits[i, 2:3] <- c(which(freqs$alpha == tmpalpha)[1] + which.max(loglik) - 1,
+                      factor + max(loglik))
+}
+write_csv(fits, "fits_slim.csv")
+fits <- read_csv("fits_slim.csv")
+```
+
 ## Do constrained fitting
 ```{r}
 fits0 <- data.frame(cme = cmes, idx = 0, loglik = -Inf)
@@ -458,12 +484,12 @@ explore %>%
           legend.position = "bottom")
 
 explore %>% 
-    group_by(alphaS, alphaI, R0) %>% 
+    group_by(alpha, f, R0) %>% 
     summarize(count = n()) %>% 
     ungroup %>% 
-    pivot_longer(c(alphaS,alphaI,R0), names_to = "parameter") %>% 
+    pivot_longer(c(alpha,f,R0), names_to = "parameter") %>% 
     mutate(parameter = factor(parameter, 
-                              levels = c("alphaS","alphaI","R0"))) %>% 
+                              levels = c("alpha","f","R0"))) %>% 
     ggplot(aes(x = value)) +
     geom_histogram(color = "white", fill = "black")+
     ggtitle("parameter fits across CMEs") +
@@ -1100,20 +1126,20 @@ slimbin %>%
 
 slimbin <- slimbin %>% 
     summarize(.by = starts_with("X"),
-              alphaS = alphaS[1],
-              alphaI = alphaI[1],
+              alpha = alpha[1],
+              f = f[1],
               R0 = R0[1],
               identifiable = n() == 1)
 
 slimbin[, 1:lO] <- t(apply(slimbin[, 1:lO], 1, \(x) (x + 0.00001) / sum(x + 0.00001)))
 
 logged <- as.matrix(log(slimbin[, 1:lO]))
-logged0 <- logged[slimbin$R0 == 0, ]
+# logged0 <- logged[slimbin$R0 == 0, ]
 
-npars <- 500
+npars <- 200
 M <- 1
-J <- 10
-testidx <- sample(1:nrow(slimbin), npars, replace = F)
+J <- 100
+testidx <- sample((1:nrow(slimbin))[with(slimbin, R0 <= 5 & f <= 0.5)], npars, replace = F)
 # sum(slimbin[testidx, ]$R0 == 0)
 # testidx <- c(sample((1:nrow(slimbin))[slimbin$R0 == 0], npars / 2, replace = F),
 #              sample((1:nrow(slimbin))[slimbin$R0 != 0], npars / 2, replace = F))
@@ -1139,6 +1165,11 @@ emplrt <- matrix(0, M * J, npars)
 # goodness <- matrix(0, M * J, npars)
 for (i in 1:npars) {
     print(i)
+    # i <- 100
+    tmpalpha <- slimbin$alpha[testidx[i]]
+    tmplogged <- logged[slimbin$alpha == tmpalpha, ]
+    tmplogged0 <- logged[slimbin$alpha == tmpalpha & slimbin$R0 == 0, ]
+
     tmpdat <- rmultinom(M, N, slimbin[testidx[i], 1:lO])
     tmpdatresample <- matrix(0, lO, M * J)
     if (J == 1) { tmpdatresample <- tmpdat
@@ -1150,12 +1181,13 @@ for (i in 1:npars) {
             })
         }
     }
-    bestidx[, i] <- apply(tmpdatresample, 2, \(x) which.max(logged %*% x))
+    bestidx[, i] <- apply(tmpdatresample, 2, \(x) which.max(tmplogged %*% x)) +
+        which(slimbin$alpha == tmpalpha)[1] - 1
     
-    best <- apply(tmpdatresample, 2, \(x) max(logged %*% x))
+    best <- apply(tmpdatresample, 2, \(x) max(tmplogged %*% x))
     
-    best0 <- apply(tmpdatresample, 2, \(x) max(logged0 %*% x))
-    emplrt[, i] <- pchisq(2 * abs(best - best0), 2, lower.tail = F, log.p = F) / 2
+    best0 <- apply(tmpdatresample, 2, \(x) max(tmplogged0 %*% x))
+    emplrt[, i] <- pchisq(2 * abs(best - best0), 1, lower.tail = F, log.p = F) / 2
 
     # pois <- apply(tmpdatresample, 2, \(x) {
     #     lambda <- mean(rep(0:(lO - 1), as.numeric(x))) + 1e-5
@@ -1186,7 +1218,7 @@ for (i in 1:npars) {
         as.matrix(rbind(slimbin[testidx[i], (lO + 1):(lO + 4)],
                         cbind(apply(slimbin[bestidx[, i], (lO + 1):(lO + 3)], 2,
                                 \(x) c(quantile(x, 0.1), 
-                                       mean(x), 
+                                       quantile(x, 0.5), 
                                        quantile(x, 0.9))),
                             identifiable = mean(slimbin[bestidx[, i], ]$identifiable))))
 }
@@ -1197,27 +1229,28 @@ retro <- data.frame(cbind(retro[rep(c(T, F, F, F), npars), 1:3],
                          retro[rep(c(T, F, F, F), npars), 4],
                          retro[rep(c(F, T, F, F), npars), 4]))
 retro <- retro %>% 
-    rename(alphaS = X1, alphaI = X2, R0 = X3,
-           alphaSlow = X4, alphaIlow = X5, R0low = X6,
-           alphaSmed = X7, alphaImed = X8, R0med = X9,
-           alphaShigh = X10, alphaIhigh = X11, R0high = X12,
+    rename(alpha = X1, f = X2, R0 = X3,
+           alphalow = X4, flow = X5, R0low = X6,
+           alphamed = X7, fmed = X8, R0med = X9,
+           alphahigh = X10, fhigh = X11, R0high = X12,
            identifiable = X13, identified = X14)
 
 # plotretro <- rbind(retro[sample((1:nrow(retro))[retro$R0 == 0], 10, replace = F), ],
 #       retro[retro$R0 != 0, ]) %>% 
 #     filter(identified == 1)
 plotretro <- retro %>% filter(identified == 1)
+plotretro <- retro
 
-ggplot(plotretro, aes(x = alphaS, y = alphaSmed)) +
+ggplot(plotretro, aes(x = alpha, y = alphamed)) +
     geom_point(alpha = 0.6, shape = 12) +
-    geom_linerange(aes(ymin = alphaSlow, ymax = alphaShigh),
+    geom_linerange(aes(ymin = alphalow, ymax = alphahigh),
                     alpha = 0.15) +
     geom_abline(color = "red", linetype = 2) +
     theme_classic() +
     ylab("estimate") +
     theme(text = element_text(size = 12, family = "mono"))
-ggplot(plotretro, aes(x = alphaI, y = alphaImed)) +
-    geom_linerange(aes(ymin = alphaIlow, ymax = alphaIhigh),
+ggplot(plotretro, aes(x = f, y = fmed)) +
+    geom_linerange(aes(ymin = flow, ymax = fhigh),
                     alpha = 0.15) +
     geom_point(alpha = 0.6, shape = 12) +
     scale_color_manual(values = c("grey", "black")) +
@@ -1234,8 +1267,8 @@ ggplot(plotretro, aes(x = R0, y = R0med)) +
     theme_classic() +
     ylab("estimate") +
     theme(text = element_text(size = 12, family = "mono"))
-ggplot(plotretro, aes(x = R0 + alphaI, y = R0med + alphaImed)) +
-    geom_linerange(aes(ymin = R0low + alphaIlow, ymax = R0high + alphaIhigh),
+ggplot(plotretro, aes(x = R0 + alpha*f, y = R0med + alphamed*fmed)) +
+    geom_linerange(aes(ymin = R0low + alphalow*flow, ymax = R0high + alphahigh*fhigh),
                     alpha = 0.15) +
     geom_point(alpha = 0.6, shape = 12) +
     geom_abline(color = "red", linetype = 2) +
