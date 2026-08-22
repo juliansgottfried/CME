@@ -320,3 +320,112 @@ data.frame(count = 0:(O - 1), freq = gatherNI[1:O]) %>%
           legend.position = "bottom")
 ```
 
+## Permutation --> Model: step 1
+```{r}
+pval1 <- rep(0, length(cmes))
+for (i in 1:length(cmes)) {
+    print(i)
+    fj <- suppressMessages(cmemat %>% mutate(inq = cmemat[[cmes[i]]]) %>% 
+        group_by(species) %>% summarize(f = mean(inq)))
+    pi <- left_join(hostdat, fj, by = "species") %>%
+        group_by(aid) %>%
+        select(aid, species, f) %>% 
+        distinct %>% 
+        summarize(pi = 1 - prod(1 - f)) %>%
+        pull(pi)
+    obs <- cmemat %>% mutate(inq = cmemat[[cmes[i]]]) %>% 
+        group_by(aid) %>% summarize(present = sum(inq) > 0) %>% 
+        pull(present) %>% sum
+    pval1[i] <- poisbinom::ppoisbinom(obs, pi)
+}
+data.frame(cme = 1:length(cmes), pval = sort(pval1, decreasing = T)) %>% 
+    ggplot(aes(x = cme, y = pval)) +
+    geom_point(alpha = 0.8, shape = 3) +
+    geom_hline(yintercept = 0.05, color = "red", linetype = 2) +
+    theme_classic() +
+    ylab("p-value") +
+    theme(text = element_text(size = 12, family = "mono"))
+```
+
+## Permutation --> Model: step 2
+```{r}
+pval2 <- rep(0, length(cmes))
+for (i in 1:length(cmes)) {
+    print(i)
+    fj <- suppressMessages(cmemat %>% mutate(inq = cmemat[[cmes[i]]]) %>% 
+        group_by(species, aid) %>% summarize(inq = sum(inq) > 0) %>% 
+        summarize(f = mean(inq)))
+    pi <- left_join(hostdat, fj, by = "species") %>%
+        group_by(aid) %>%
+        select(aid, species, f) %>% 
+        distinct %>% 
+        summarize(pi = 1 - prod(1 - f)) %>%
+        pull(pi)
+    obs <- cmemat %>% mutate(inq = cmemat[[cmes[i]]]) %>% 
+        group_by(aid) %>% summarize(present = sum(inq) > 0) %>% 
+        pull(present) %>% sum
+    pval2[i] <- poisbinom::ppoisbinom(obs, pi)
+}
+data.frame(cme = 1:length(cmes), pval = sort(pval2, decreasing = T)) %>% 
+    ggplot(aes(x = cme, y = pval)) +
+    geom_point(alpha = 0.8, shape = 3) +
+    geom_hline(yintercept = 0.05, color = "red", linetype = 2) +
+    theme_classic() +
+    ylab("p-value") +
+    theme(text = element_text(size = 12, family = "mono"))
+```
+
+## Permutation --> Model: step 3
+```{r}
+pval3 <- rep(0, length(cmes))
+for (i in 1:length(cmes)) {
+    print(i)
+    fj <- NI[NI$cme == cmes[i], ] %>% filter(N > 0) %>% 
+        mutate(f = I / N) %>% pull(f) %>% mean
+    pi <- 1 - (1 - fj) ^ NI[NI$cme == cmes[i], "N"]
+    obs <- cmemat %>% mutate(inq = cmemat[[cmes[i]]]) %>% 
+        group_by(aid) %>% summarize(present = sum(inq) > 0) %>% 
+        pull(present) %>% sum
+    pval3[i] <- poisbinom::ppoisbinom(obs, pi)
+}
+data.frame(cme = 1:length(cmes), pval = sort(pval3, decreasing = T)) %>% 
+    ggplot(aes(x = cme, y = pval)) +
+    geom_point(alpha = 0.8, shape = 3) +
+    geom_hline(yintercept = 0.05, color = "red", linetype = 2) +
+    theme_classic() +
+    ylab("p-value") +
+    theme(text = element_text(size = 12, family = "mono"))
+```
+
+## All steps
+```{r}
+pval0 <- rep(0, length(cmes))
+for (i in 1:length(cmes)) {
+    pval0[i] <- cmetab[cmetab$cseg == cmes[i], ]$p_subjects
+}
+pval4 <- rep(0, length(cmes))
+for (i in 1:length(cmes)) {
+    pval4[i] <- fits[fits$cme == cmes[i], ]$pval
+}
+
+pval_labs <- c("pval0" = "Permutation test",
+               "pval1" = "Parametric version",
+               "pval2" = "Aggregated at species level",
+               "pval3" = "Species made exchangeable",
+               "pval4" = "Model-based LRT")
+data.frame(cme = cmes, 
+           pval0 = pval0, pval1 = pval1, 
+           pval2 = pval2, pval3 = pval3,
+           pval4 = pval4) %>% 
+    arrange(-pval4) %>% mutate(cme = row_number()) %>% 
+    pivot_longer(pval0:pval4) %>% 
+    ggplot(aes(x = cme, y = value)) +
+    geom_point(alpha = 0.8, shape = 3) +
+    geom_hline(yintercept = 0.05, color = "red", linetype = 2) +
+    theme_classic() +
+    ylab("p-value") +
+    theme(text = element_text(size = 12, family = "mono")) +
+    facet_wrap(~name, ncol = 1, labeller = labeller(name = pval_labs))
+```
+
+It seems that Eitan's test statistic is capturing a different side of things. I should do the fourth test in retrodiction to get a sense of whether it works or not. And I need to consider whether the failure of R0 fitting (leading to no significance) is a real failure of data or just a failure of the model-fitting approach (which would be fine, but would justify the continued use of the permutation test).
