@@ -65,10 +65,10 @@ fitting <- function(statistics, counts) {
     hat <- which.max(loglik)
     
     profiledf <- sapply(f, \(x) max(loglik[round(slimfreq$f, 2) == round(x, 2)]))
-    finterval <- 2 * (max(loglik) - profiledf) <= qchisq(0.89, 1)
+    finterval <- 2 * (max(loglik) - profiledf) <= qchisq(0.95, 1)
 
     profiledR0 <- sapply(R0, \(x) max(loglik[round(slimfreq$R0, 2) == round(x, 2)]))
-    R0interval <- 2 * (max(loglik) - profiledR0) <= qchisq(0.89, 1)
+    R0interval <- 2 * (max(loglik) - profiledR0) <= qchisq(0.95, 1)
 
     returner <- rep(0, 8)
     
@@ -252,7 +252,7 @@ for (i in 1:45) {
         idx <- idx + 1
     }
 }
-write_csv(fits, "newfits2.csv")
+write_csv(fits, "fits.csv")
 ```
 
 ## Viz
@@ -582,37 +582,54 @@ problems <- summar %>% filter(q1 == 0, q2 == 0, q3 == 0) %>% pull(cme)
 mean((fits %>% filter(fu == 0) %>% pull(cme)) %in% problems)
 ```
 
-Essentially, when we estimate f = 0, we expect a different result
+## Plot for proposal
+```{r}
+fits %>% 
+    filter(!(R0u == 9.9 & R0l == 0)) %>% 
+    mutate(R0 = (R0l + R0u) / 2) %>% 
+    ggplot(aes(x = R0)) +
+    geom_bar(fill = "black") +
+    theme_classic() +
+    ylab("count") + xlab(expression(R["0"]))
+    theme(text = element_text(size = 12, family = "mono"))
+fits %>% 
+    filter(!(R0u == 9.9 & R0l == 0)) %>% 
+    mutate(R0 = (R0l + R0u) / 2) %>% 
+    ggplot(aes(x = R0, fill = pval > 0.05)) +
+    geom_bar(position = position_stack()) +
+    scale_fill_manual(name = "",
+                       labels = c("p < 0.05","n.s."),
+                       values = c("#818ade","black")) +
+    theme_classic() +
+    ylab("count") + xlab(expression(R["0"]))
+    theme(text = element_text(size = 12, family = "mono"))
+fits %>% 
+    arrange(-(R0l + R0u) / 2) %>% 
+    filter(!(R0u == 9.9 & R0l == 0)) %>% 
+    mutate(cme = row_number()) %>% 
+    ggplot(aes(x = cme, y = (R0l + R0u) / 2)) +
+    geom_point(shape = 3) +
+    geom_linerange(aes(ymin = R0l, ymax = R0u), alpha = 0.4) +
+    theme_classic() +
+    ylab(expression(R["0"])) + xlab("CME (rank-ordered)") +
+    theme(text = element_text(size = 12, family = "mono"))
+fits %>% 
+    arrange(-(R0l + R0u) / 2) %>% 
+    filter(!(R0u == 9.9 & R0l == 0)) %>% 
+    mutate(cme = row_number(), sig = pval < 0.05) %>% 
+    ggplot(aes(x = cme, y = (R0l + R0u) / 2, color = !sig)) +
+    geom_point(shape = 3) +
+    geom_linerange(aes(ymin = R0l, ymax = R0u), alpha = 0.6) +
+    scale_color_manual(name = "Significance",
+                       labels = c("< 0.05","n.s."),
+                       values = c("#6972c9", "black")) +
+    theme_classic() +
+    ylab(expression(R["0"])) + xlab("CME (rank-ordered)") +
+    theme(text = element_text(size = 12, family = "mono"),
+          legend.position = "right")
 
-If we remove all of those CMEs, then the simulated parametric test begins to agree with the real one. However it therefore no longer agrees with the model-based test
-
-So this explains what "data" is being lost when we simulate - which makes perfect sense
-So i need to either address it or at least acknowledge it
-
-Ok wait so this means the simulation captures the same underlying information as the data, when it comes to the parametric singificance test
-
-which means that i can trust the retrodictive simulations and what they suggest
-
-so now i have a decision to make
-
-because it appeared that the parametric test was fucking the pooch in the random sample simulations
-
-but in this retrodiction using the actual data (and not simulating from an alpha) it appears to be doing rather well, better even than the likelihood test
-it's not as deep a sample but it is literally the simulations that matter - if these were the param values, as claimed, and using this conditional data, then this is what we'd find
-and it's working well
-
-so i guess the questions remains of how to deal with the f
-but presumably the f is just a crunching and a mis-estimation
-so we can either use a finer range of f, force it to be non-zero, or allow it to be 
-and anyhow the f doesn't really matter at all bc 1. we care about R0 2. it seems we can use the other test
-
-buttt that's still not ideal
-bc our R0 plot is a lot cleaner if significance is called with the other test
-in fact
-it feels very reasonable
-we remove most of the ones with no information
-and theres a significance call it seems for anything above a certain R0 magnitude
-the discrepancy is therefore just a matter of fine detail
-they are fairly equivalent but not entirely equivalent in terms of how significance is actually called
-visually it feels rather reasonable
-
+# fits %>% 
+#     filter(!(R0u == 9.9 & R0l == 0)) %>% 
+#     mutate(R0 = (R0l + R0u) / 2) %>% 
+#     select(cme, R0) %>% write_csv("R0.csv")
+```
