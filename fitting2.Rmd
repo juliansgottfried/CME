@@ -66,28 +66,24 @@ fitting <- function(statistics, counts) {
     
     profiledf <- sapply(f, \(x) max(loglik[round(slimfreq$f, 2) == round(x, 2)]))
     finterval <- 2 * (max(loglik) - profiledf) <= qchisq(0.89, 1)
-    finterval <- quantile(f[finterval], c(0.055, 0.5, 0.945))
-    
+
     profiledR0 <- sapply(R0, \(x) max(loglik[round(slimfreq$R0, 2) == round(x, 2)]))
     R0interval <- 2 * (max(loglik) - profiledR0) <= qchisq(0.89, 1)
-    R0interval <- quantile(R0[R0interval], c(0.055, 0.5, 0.945))
-    
-    returner <- rep(0, 10)
+
+    returner <- rep(0, 8)
     
     returner[1] <- slimfreq$f[hat]
-    returner[2] <- finterval[1]
-    returner[3] <- finterval[2]
-    returner[4] <- finterval[3]
-    
-    returner[5] <- slimfreq$R0[hat]
-    returner[6] <- R0interval[1]
-    returner[7] <- R0interval[2]
-    returner[8] <- R0interval[3]
-    
-    returner[9] <- pchisq(2 * (max(loglik) - max(loglik[slimfreq$R0 == 0])), 
+    returner[2] <- range(f[finterval])[1]
+    returner[3] <- range(f[finterval])[2]
+
+    returner[4] <- slimfreq$R0[hat]
+    returner[5] <- range(R0[R0interval])[1]
+    returner[6] <- range(R0[R0interval])[2]
+
+    returner[7] <- pchisq(2 * (max(loglik) - max(loglik[slimfreq$R0 == 0])), 
                             1, lower.tail = F, log.p = F) / 2
     
-    returner[10] <- max(loglik)
+    returner[8] <- max(loglik)
     
     returner
 }
@@ -145,18 +141,14 @@ for (i in 1:length(cmes)) {
 
 ## Estimate alpha
 ```{r}
-alphas <- NI %>% group_by(cme) %>% summarize(alpha = round(mean(N, 0)))
+alphas <- NI %>% mutate(cme = factor(NI$cme, levels = unique(NI$cme))) %>% 
+    group_by(cme) %>% summarize(alpha = round(mean(N, 0)))
 alphalist <- sort(unique(alphas$alpha))
-# alphaidx <- list(tmp1 = alphalist[1:10],
-#                  tmp2 = alphalist[11:20],
-#                  tmp3 = alphalist[21:30],
-#                  tmp4 = alphalist[31:40],
-#                  tmp5 = alphalist[41:45])
 ```
 
 ## Retrodiction: setup
 ```{r}
-testalpha <- 59
+testalpha <- 33
 testcounts <- read_csv(paste0("alpharesults/alpha_", which(alphalist == testalpha),".csv"))
 testcounts[, 1:O] <- testcounts[, 1:O] + 1 / 10
 rowsums <- rowSums(testcounts[, 1:O])
@@ -164,30 +156,42 @@ testcounts[, 1:O] <- testcounts[, 1:O] %>%
     mutate_all(\(x) x / rowsums)
 
 condN <- rpois(N, testalpha)
-samplepars <- rbind(testcounts %>% filter(R0 == 0, f <= 0.5) %>% select(f, R0) %>% sample_n(100),
-                    testcounts %>% filter(R0 > 0, R0 < 5, f <= 0.5) %>% select(f, R0) %>% sample_n(100))
+samplepars <- rbind(testcounts %>% filter(R0 == 0, f <= 0.5) %>% 
+                        select(f, R0) %>% sample_n(100),
+                    testcounts %>% filter(R0 > 0, R0 < 5, f <= 0.5) %>% 
+                        select(f, R0) %>% sample_n(100))
 ```
 
 ## Retrodiction: fitting
 ```{r}
-testret <- matrix(0, nrow=200, ncol=10)
+testret <- matrix(0, nrow=200, ncol=9)
 for (i in 1:200) {
     print(i)
     sim <- apply((testcounts %>% filter(f == samplepars[i, ]$f, R0 == samplepars[i, ]$R0))[condN, 1:O],
                  1, \(x)  which.max(rmultinom(1, 1, x)) - 1)
+    
     statistics <- data.frame(N = condN, I = sim)
     
-    testret[i, ] <- fitting(statistics, testcounts)
+    testret[i, 1:8] <- fitting(statistics, testcounts)
+    
+    fj <- statistics %>% filter(N > 0) %>% 
+        mutate(f = I / N) %>% pull(f) %>% mean
+    pi <- 1 - (1 - fj) ^ statistics$N
+    if (sum(pi) == 0) { testret[i, 9] <- 1
+    } else {
+        obs <- sum(statistics$I > 0)
+        testret[i, 9] <- poisbinom::ppoisbinom(obs, pi)
+    }
 }
 ```
 
 ## Retrodiction: viz
 ```{r}
 explore <- data.frame(cbind(testret, samplepars))
-colnames(explore)[1:10] <- c("fhat","fl","fm","fu","R0hat","R0l","R0m","R0u","pval","loglik")
+colnames(explore)[1:9] <- c("fhat","fl","fu","R0hat","R0l","R0u","pval4","loglik","pval3")
 
 explore %>% 
-    ggplot(aes(x = R0, y = R0m)) +
+    ggplot(aes(x = R0, y = (R0l + R0u) / 2)) +
     geom_linerange(aes(ymin = R0l, ymax = R0u), alpha = 0.15) +
     geom_point(alpha = 0.9, shape = 1) +
     geom_abline(color = "red", linetype = 2) +
@@ -196,7 +200,7 @@ explore %>%
     theme(text = element_text(size = 12, family = "mono"))
 
 explore %>% 
-    ggplot(aes(x = f, y = fm)) +
+    ggplot(aes(x = f, y = (fl + fu) / 2)) +
     geom_linerange(aes(ymin = fl, ymax = fu), alpha = 0.15) +
     geom_point(alpha = 0.9, shape = 1) +
     geom_abline(color = "red", linetype = 2) +
@@ -206,8 +210,16 @@ explore %>%
 
 explore %>%
     mutate(is0 = ifelse(R0 == 0, "R0 = 0", "R0 > 0")) %>% 
-    ggplot(aes(x = pval)) +
-    geom_histogram() +
+    ggplot(aes(x = pval4)) +
+    geom_histogram(color = "black", fill = "white") + 
+    facet_wrap(~is0) +
+    xlab("p-value") +
+    theme_classic() +
+    theme(text = element_text(size = 12, family = "mono"))
+
+explore %>%
+    mutate(is0 = ifelse(R0 == 0, "R0 = 0", "R0 > 0")) %>% 
+    ggplot(aes(x = pval3)) +
     geom_histogram(color = "black", fill = "white") + 
     facet_wrap(~is0) +
     xlab("p-value") +
@@ -218,8 +230,8 @@ explore %>%
 ## CME fitting
 ```{r}
 fits <- data.frame(cme = cmes, 
-                   fhat = 0, fl = 0, fm = 0, fu = 0,
-                   R0hat = 0, R0l = 0, R0m = 0, R0u = 0,
+                   fhat = 0, fl = 0, fu = 0,
+                   R0hat = 0, R0l = 0, R0u = 0,
                    pval = 1,
                    loglik = -Inf)
 idx <- 1
@@ -240,7 +252,7 @@ for (i in 1:45) {
         idx <- idx + 1
     }
 }
-write_csv(fits, "newfits.csv")
+write_csv(fits, "newfits2.csv")
 ```
 
 ## Viz
@@ -248,23 +260,34 @@ write_csv(fits, "newfits.csv")
 fits <- fits %>% 
     mutate(across(-cme, as.numeric))
 
+NI %>% group_by(cme) %>% summarize(test = sum(I)/sum(N)) %>% 
+    right_join(fits, by = "cme") %>% 
+    mutate(failed = R0u == 9.9 & R0l == 0,
+           test = round(test, 3)) %>% 
+    group_by(test) %>% summarize(pfail = mean(failed)) %>% 
+    ggplot(aes(x = test, y = pfail)) +
+    geom_point(size = 2.5, shape = 10) +
+    theme_classic() +
+    xlab("fraction of observations infected") + ylab("fitting failure") +
+    theme(text = element_text(size = 12, family = "mono"))
+
 fits %>% 
-    arrange(-R0m) %>% 
+    arrange(-(R0l + R0u) / 2) %>% 
     mutate(cme = row_number(), sig = pval >= 0.05) %>% 
-    ggplot(aes(x = cme, y = R0m, color = sig)) +
+    ggplot(aes(x = cme, y = (R0l + R0u) / 2, color = sig)) +
     geom_linerange(aes(ymin = R0l, ymax = R0u), alpha = 0.15) +
     geom_point(alpha = 0.8, shape = 3) +
     scale_color_manual(name = "",
                        labels = c("significant","non-significant"),
-                       values = c("#5e0019", "#9590d6")) +
+                       values = c("#910027", "#818ade")) +
     theme_classic() +
     ylab("R0") +
     theme(text = element_text(size = 12, family = "mono"))
 
 fits %>% 
-    arrange(-fm) %>% 
+    arrange(-(fl + fu) / 2) %>% 
     mutate(cme = row_number()) %>% 
-    ggplot(aes(x = cme, y = fm)) +
+    ggplot(aes(x = cme, y = (fl + fu) / 2)) +
     geom_linerange(aes(ymin = fl, ymax = fu), alpha = 0.15) +
     geom_point(alpha = 0.8, shape = 3) +
     theme_classic() +
@@ -284,12 +307,13 @@ fits %>%
 
 ## Examining specific CMEs
 ```{r}
-tester <- "c4"
-parfit <- fits[fits$cme == tester, c("fm", "R0m")]
+tester <- "c8"
+parfit <- fits[fits$cme == tester, c("fl", "fu", "R0l", "R0u")]
 testcounts <- read_csv(paste0("alpharesults/alpha_",
                           which(alphalist == min(alphas$alpha[alphas$cme == tester], 94)),
                           ".csv"))
-testcounts <- testcounts %>% filter(f == round(parfit$fm, 2), R0 == round(parfit$R0m, 1))
+testcounts <- testcounts %>% filter(f == with(parfit, round((fl + fu) / 2, 2)), 
+                                    R0 == with(parfit, round((R0l + R0u) / 2, 1)))
 gatherNI <- colSums(testcounts[NI[NI$cme == tester, "N"], ])
 gatherNI <- gatherNI / sum(gatherNI)
 
@@ -388,7 +412,9 @@ for (i in 1:length(cmes)) {
         pull(present) %>% sum
     pval3[i] <- poisbinom::ppoisbinom(obs, pi)
 }
-data.frame(cme = 1:length(cmes), pval = sort(pval3, decreasing = T)) %>% 
+data.frame(pval = pval3, alpha = alphas$alpha) %>% 
+    arrange(-pval) %>% 
+    mutate(cme = row_number()) %>% 
     ggplot(aes(x = cme, y = pval)) +
     geom_point(alpha = 0.8, shape = 3) +
     geom_hline(yintercept = 0.05, color = "red", linetype = 2) +
@@ -407,7 +433,6 @@ pval4 <- rep(0, length(cmes))
 for (i in 1:length(cmes)) {
     pval4[i] <- fits[fits$cme == cmes[i], ]$pval
 }
-
 pval_labs <- c("pval0" = "Permutation test",
                "pval1" = "Parametric version",
                "pval2" = "Aggregated at species level",
@@ -416,11 +441,16 @@ pval_labs <- c("pval0" = "Permutation test",
 data.frame(cme = cmes, 
            pval0 = pval0, pval1 = pval1, 
            pval2 = pval2, pval3 = pval3,
-           pval4 = pval4) %>% 
+           pval4 = pval4,
+           alpha = alphas$alpha) %>% 
+    left_join(fits %>% select(cme, fu), by = "cme") %>% 
     arrange(-pval4) %>% mutate(cme = row_number()) %>% 
     pivot_longer(pval0:pval4) %>% 
-    ggplot(aes(x = cme, y = value)) +
+    ggplot(aes(x = cme, y = value, color = fu == 0)) +
     geom_point(alpha = 0.8, shape = 3) +
+    scale_color_manual(values = c("black", "grey"), 
+                       labels = c("f = 0","f > 0"),
+                       name = "") +
     geom_hline(yintercept = 0.05, color = "red", linetype = 2) +
     theme_classic() +
     ylab("p-value") +
@@ -428,4 +458,161 @@ data.frame(cme = cmes,
     facet_wrap(~name, ncol = 1, labeller = labeller(name = pval_labs))
 ```
 
-It seems that Eitan's test statistic is capturing a different side of things. I should do the fourth test in retrodiction to get a sense of whether it works or not. And I need to consider whether the failure of R0 fitting (leading to no significance) is a real failure of data or just a failure of the model-fitting approach (which would be fine, but would justify the continued use of the permutation test).
+## Failure of Poisson(alpha) for data
+```{r}
+examineerror <- NI %>% group_by(cme) %>% 
+    summarize(Ealpha = mean(N), Valpha = var(N)) %>% 
+    mutate(ratio = Ealpha/Valpha)
+examineerror %>%
+    ggplot(aes(x = Ealpha, y = Valpha)) +
+    geom_point(alpha = 0.5) +
+    geom_abline(slope = 1, intercept = 0, color = "red", linetype = 2) +
+    theme_classic() +
+    theme(text = element_text(size = 12, family = "mono"))
+examineerror %>% filter(ratio > 0.75) %>% select(cme, Ealpha)
+```
+
+## Significance retrodiction under fitted parameters
+```{r}
+sigs <- data.frame(cme = cmes, pval3 = 1, pval4 = 0.5)
+idx <- 1
+for (i in 1:45) {
+    tmpalpha <- alphalist[i]
+    counts <- suppressMessages(read_csv(paste0("alpharesults/alpha_", i, ".csv")))
+    counts[, 1:O] <- counts[, 1:O] + 1 / 10
+    divider <- rowSums(counts[, 1:O])
+    counts[, 1:O] <- apply(counts[, 1:O], 2, \(x) x / divider)
+    
+    if (i == 45) { tmpcmes <- alphas$cme[alphas$alpha >= tmpalpha]
+    } else tmpcmes <- alphas$cme[alphas$alpha == tmpalpha]
+    
+    for (j in 1:length(tmpcmes)) {
+        print(idx)
+        tmpN <- NI %>% filter(cme == tmpcmes[j]) %>% filter(N > 0) %>% pull(N)
+
+        sigs[idx, 1] <- as.character(tmpcmes[j])
+        
+        tmppar <- fits %>% filter(cme == tmpcmes[j]) %>% 
+            mutate(f = round((fl + fu) / 2, 2),
+                   R0 = round((R0l + R0u) / 2, 1)) %>% 
+            select(f, R0)
+        
+        sim <- apply((counts %>% filter(round(f, 2) == tmppar$f, round(R0, 1) == tmppar$R0))[tmpN, 1:O],
+                 1, \(x)  which.max(rmultinom(1, 1, x)) - 1)
+    
+        statistics <- data.frame(N = tmpN, I = sim)
+        
+        sigs[idx, 3] <- fitting(statistics, counts)[7]
+        
+        fj <- statistics %>% mutate(f = I / N) %>% pull(f) %>% mean
+        pi <- 1 - (1 - fj) ^ statistics$N
+        if (sum(pi) > 0) {
+            obs <- sum(statistics$I > 0)
+            sigs[idx, 2] <- poisbinom::ppoisbinom(obs, pi)
+        }
+        idx <- idx + 1
+    }
+}
+examine <- fits %>% mutate(f = round((fl + fu) / 2, 2),
+                R0 = round((R0l + R0u) / 2, 1)) %>% 
+    select(cme, f, R0, pval4 = pval) %>% 
+    left_join(data.frame(cme = cmes, pval3 = pval3), by = "cme") %>% 
+    left_join(sigs %>% rename(retro3 = pval3, retro4 = pval4), by = "cme")
+examine %>%
+    mutate(is0 = ifelse(R0 == 0, "R0 = 0", "R0 > 0")) %>% 
+    filter(f > 0) %>% 
+    ggplot(aes(x = retro4)) +
+    geom_histogram(color = "black", fill = "white") + 
+    facet_wrap(~is0) +
+    xlab("p-value") +
+    theme_classic() +
+    theme(text = element_text(size = 12, family = "mono"))
+```
+
+## Sim I vs. real I
+```{r}
+Isim <- list()
+idx <- 1
+for (i in 1:45) {
+    tmpalpha <- alphalist[i]
+    counts <- suppressMessages(read_csv(paste0("alpharesults/alpha_", i, ".csv")))
+    counts[, 1:O] <- counts[, 1:O] + 1 / 10
+    divider <- rowSums(counts[, 1:O])
+    counts[, 1:O] <- apply(counts[, 1:O], 2, \(x) x / divider)
+    
+    if (i == 45) { tmpcmes <- alphas$cme[alphas$alpha >= tmpalpha]
+    } else tmpcmes <- alphas$cme[alphas$alpha == tmpalpha]
+    
+    for (j in 1:length(tmpcmes)) {
+        print(idx)
+        tmpN <- NI %>% filter(cme == tmpcmes[j]) %>% filter(N > 0) %>% pull(N)
+
+        # sigs[idx, 1] <- as.character(tmpcmes[j])
+        
+        tmppar <- fits %>% filter(cme == tmpcmes[j]) %>% 
+            mutate(f = round((fl + fu) / 2, 2),
+                   R0 = round((R0l + R0u) / 2, 1)) %>% 
+            select(f, R0)
+        
+        sim <- apply((counts %>% filter(round(f, 2) == tmppar$f, round(R0, 1) == tmppar$R0))[tmpN, 1:O],
+                 1, \(x)  apply(rmultinom(100, 1, x), 2, which.max) - 1)
+
+        Isim[[as.character(tmpcmes[j])]] <- sim
+        
+        idx <- idx + 1
+    }
+}
+summar <- map2(Isim, names(Isim), \(x, y) {
+    tmpN <- NI %>% filter(cme == y) %>% pull(N)
+    tmpN <- tmpN[tmpN > 0]
+    tmpstat <- apply(x, 1, \(row) mean(row / tmpN))
+    c(mean(tmpstat), quantile(tmpstat, c(0.055, 0.5, 0.945)))}) %>% 
+    bind_rows %>% t %>% data.frame
+colnames(summar) <- c("mean","q1","q2","q3")
+summar$cme <- rownames(summar)
+summar <- NI %>% group_by(cme) %>% 
+    summarize(f = mean(I / N, na.rm = T)) %>% 
+    left_join(summar, by = "cme")
+summar %>% ggplot(aes(x = f, y = q2)) +
+    geom_point(alpha = 0.25) +
+    geom_linerange(aes(ymin = q1, ymax = q3), alpha = 0.25) +
+    geom_abline(color = "red", linetype = 2) +
+    theme_classic()
+problems <- summar %>% filter(q1 == 0, q2 == 0, q3 == 0) %>% pull(cme)
+mean((fits %>% filter(fu == 0) %>% pull(cme)) %in% problems)
+```
+
+Essentially, when we estimate f = 0, we expect a different result
+
+If we remove all of those CMEs, then the simulated parametric test begins to agree with the real one. However it therefore no longer agrees with the model-based test
+
+So this explains what "data" is being lost when we simulate - which makes perfect sense
+So i need to either address it or at least acknowledge it
+
+Ok wait so this means the simulation captures the same underlying information as the data, when it comes to the parametric singificance test
+
+which means that i can trust the retrodictive simulations and what they suggest
+
+so now i have a decision to make
+
+because it appeared that the parametric test was fucking the pooch in the random sample simulations
+
+but in this retrodiction using the actual data (and not simulating from an alpha) it appears to be doing rather well, better even than the likelihood test
+it's not as deep a sample but it is literally the simulations that matter - if these were the param values, as claimed, and using this conditional data, then this is what we'd find
+and it's working well
+
+so i guess the questions remains of how to deal with the f
+but presumably the f is just a crunching and a mis-estimation
+so we can either use a finer range of f, force it to be non-zero, or allow it to be 
+and anyhow the f doesn't really matter at all bc 1. we care about R0 2. it seems we can use the other test
+
+buttt that's still not ideal
+bc our R0 plot is a lot cleaner if significance is called with the other test
+in fact
+it feels very reasonable
+we remove most of the ones with no information
+and theres a significance call it seems for anything above a certain R0 magnitude
+the discrepancy is therefore just a matter of fine detail
+they are fairly equivalent but not entirely equivalent in terms of how significance is actually called
+visually it feels rather reasonable
+
