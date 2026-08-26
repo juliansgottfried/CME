@@ -44,5 +44,5 @@ pmap(eachindex(α)) do i
             end
         end
     end
-    DelimitedFiles.writedlm("/scratch/users/jgottf/CME/JLresults/counts_$i.csv", counts, ',')
+    DelimitedFiles.writedlm("/scratch/users/jgottf/CME/results/counts_$i.csv", counts, ',')
 end
