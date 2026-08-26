@@ -142,7 +142,8 @@ for (i in 1:length(cmes)) {
 ## Estimate alpha
 ```{r}
 alphas <- NI %>% mutate(cme = factor(NI$cme, levels = unique(NI$cme))) %>% 
-    group_by(cme) %>% summarize(alpha = round(mean(N, 0)))
+    group_by(cme) %>% summarize(alpha = round(mean(N, 0))) %>% 
+    mutate(cme = varhandle::unfactor(cme))
 alphalist <- sort(unique(alphas$alpha))
 ```
 
@@ -307,13 +308,13 @@ fits %>%
 
 ## Examining specific CMEs
 ```{r}
-tester <- "c8"
+tester <- "c800"
 parfit <- fits[fits$cme == tester, c("fl", "fu", "R0l", "R0u")]
 testcounts <- read_csv(paste0("alpharesults/alpha_",
                           which(alphalist == min(alphas$alpha[alphas$cme == tester], 94)),
                           ".csv"))
-testcounts <- testcounts %>% filter(f == with(parfit, round((fl + fu) / 2, 2)), 
-                                    R0 == with(parfit, round((R0l + R0u) / 2, 1)))
+testcounts <- testcounts %>% filter(round(f, 2) == with(parfit, round((fl + fu) / 2, 2)), 
+                                    round(R0, 1) == with(parfit, round((R0l + R0u) / 2, 1)))
 gatherNI <- colSums(testcounts[NI[NI$cme == tester, "N"], ])
 gatherNI <- gatherNI / sum(gatherNI)
 
@@ -590,7 +591,7 @@ fits %>%
     ggplot(aes(x = R0)) +
     geom_bar(fill = "black") +
     theme_classic() +
-    ylab("count") + xlab(expression(R["0"]))
+    ylab("count") + xlab(expression(R["0"])) +
     theme(text = element_text(size = 12, family = "mono"))
 fits %>% 
     filter(!(R0u == 9.9 & R0l == 0)) %>% 
@@ -601,7 +602,7 @@ fits %>%
                        labels = c("p < 0.05","n.s."),
                        values = c("#818ade","black")) +
     theme_classic() +
-    ylab("count") + xlab(expression(R["0"]))
+    ylab("count") + xlab(expression(R["0"])) +
     theme(text = element_text(size = 12, family = "mono"))
 fits %>% 
     arrange(-(R0l + R0u) / 2) %>% 
@@ -611,7 +612,7 @@ fits %>%
     geom_point(shape = 3) +
     geom_linerange(aes(ymin = R0l, ymax = R0u), alpha = 0.4) +
     theme_classic() +
-    ylab(expression(R["0"])) + xlab("CME (rank-ordered)") +
+    ylab("R0-within") + xlab("mobile element, rank-ordered") +
     theme(text = element_text(size = 12, family = "mono"))
 fits %>% 
     arrange(-(R0l + R0u) / 2) %>% 
@@ -624,12 +625,54 @@ fits %>%
                        labels = c("< 0.05","n.s."),
                        values = c("#6972c9", "black")) +
     theme_classic() +
-    ylab(expression(R["0"])) + xlab("CME (rank-ordered)") +
+    ylab("R0 within") + xlab("CME (rank-ordered)") +
     theme(text = element_text(size = 12, family = "mono"),
-          legend.position = "right")
-
-# fits %>% 
-#     filter(!(R0u == 9.9 & R0l == 0)) %>% 
-#     mutate(R0 = (R0l + R0u) / 2) %>% 
-#     select(cme, R0) %>% write_csv("R0.csv")
+          legend.position = "bottom")
 ```
+
+## Fitting success
+```{r}
+fits %>%
+    filter(!(R0u == 9.9 & R0l == 0)) %>%
+    mutate(R0 = (R0l + R0u) / 2) %>%
+    arrange(-loglik) %>%
+    mutate(idx = row_number()) %>% 
+    ggplot(aes(x = R0, y = loglik, color = cme == "c4", alpha = pval < 0.05)) +
+    geom_point(shape = 1, stroke = 0.75) +
+    scale_color_manual(values = c("black","red")) +
+    scale_alpha_manual(values = c(0.1, 0.7)) +
+    theme_classic() +
+    guides(color = "none", alpha = "none") +
+    ylab("log lik") + xlab(expression(R["0"])) +
+    theme(text = element_text(size = 12, family = "mono"))
+```
+
+## Species density distribution
+```{r}
+hostdat %>% group_by(aid, species) %>% summarize(n=n()) %>% 
+    mutate(p = n / n()) %>% ungroup %>% arrange(-p) %>% 
+    mutate(p = n() * p / sum(p)) %>% mutate(sp = row_number()) %>% 
+    mutate(sim = sort(rlnorm(n(), log(1 / sqrt(1 + var(p))), sqrt(log(1 + var(p)))), decreasing = T)) %>% 
+    pivot_longer(cols = c(p, sim)) %>% 
+    ggplot(aes(x = sp, y = value, color = name)) +
+    geom_point(alpha = 0.05, size = 1) +
+    theme_classic()
+
+hostdat %>% group_by(aid, species) %>% summarize(n=n()) %>% 
+    mutate(p = n / n()) %>% ungroup %>% arrange(-p) %>% 
+    mutate(p = n() * p / sum(p)) %>% mutate(sp = row_number()) %>% 
+    mutate(sim = sort(rlnorm(n(), log(1 / sqrt(1 + var(p))), sqrt(log(1 + var(p)))), decreasing = T)) %>% 
+    pivot_longer(cols = c(p, sim)) %>% 
+    ggplot(aes(x = sp, y = value, color = name)) +
+    geom_violin() +
+    theme_classic()
+
+testvar <- hostdat %>% group_by(aid, species) %>% summarize(n=n()) %>% 
+    mutate(p = n / n()) %>% ungroup %>% arrange(-p) %>% 
+    mutate(p = n() * p / sum(p)) %>% pull(p) %>% var
+
+mu <- log(1 / sqrt(1 + testvar))
+sigmasq <- sqrt(log(1 + testvar))
+```
+
+When a species enters, we pull from the above distribution to assign it a density. Species still go extinct at the same rate, but S and I are replaced by the sum of densities in the transmission rate. The species chosen to become infected is chosen according to its relative density among susceptibles. Well, it could work.
