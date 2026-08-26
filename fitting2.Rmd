@@ -150,7 +150,7 @@ alphalist <- sort(unique(alphas$alpha))
 ## Retrodiction: setup
 ```{r}
 testalpha <- 33
-testcounts <- read_csv(paste0("alpharesults/alpha_", which(alphalist == testalpha),".csv"))
+testcounts <- read_csv(paste0("results1/counts_", which(alphalist == testalpha),".csv"))
 testcounts[, 1:O] <- testcounts[, 1:O] + 1 / 10
 rowsums <- rowSums(testcounts[, 1:O])
 testcounts[, 1:O] <- testcounts[, 1:O] %>% 
@@ -238,7 +238,7 @@ fits <- data.frame(cme = cmes,
 idx <- 1
 for (i in 1:45) {
     tmpalpha <- alphalist[i]
-    counts <- suppressMessages(read_csv(paste0("alpharesults/alpha_", i, ".csv")))
+    counts <- suppressMessages(read_csv(paste0("results1/counts_", i, ".csv")))
     counts[, 1:O] <- counts[, 1:O] + 1 / 10
     divider <- rowSums(counts[, 1:O])
     counts[, 1:O] <- apply(counts[, 1:O], 2, \(x) x / divider)
@@ -310,7 +310,7 @@ fits %>%
 ```{r}
 tester <- "c800"
 parfit <- fits[fits$cme == tester, c("fl", "fu", "R0l", "R0u")]
-testcounts <- read_csv(paste0("alpharesults/alpha_",
+testcounts <- read_csv(paste0("results1/counts_",
                           which(alphalist == min(alphas$alpha[alphas$cme == tester], 94)),
                           ".csv"))
 testcounts <- testcounts %>% filter(round(f, 2) == with(parfit, round((fl + fu) / 2, 2)), 
@@ -479,7 +479,7 @@ sigs <- data.frame(cme = cmes, pval3 = 1, pval4 = 0.5)
 idx <- 1
 for (i in 1:45) {
     tmpalpha <- alphalist[i]
-    counts <- suppressMessages(read_csv(paste0("alpharesults/alpha_", i, ".csv")))
+    counts <- suppressMessages(read_csv(paste0("results1/counts_", i, ".csv")))
     counts[, 1:O] <- counts[, 1:O] + 1 / 10
     divider <- rowSums(counts[, 1:O])
     counts[, 1:O] <- apply(counts[, 1:O], 2, \(x) x / divider)
@@ -536,7 +536,7 @@ Isim <- list()
 idx <- 1
 for (i in 1:45) {
     tmpalpha <- alphalist[i]
-    counts <- suppressMessages(read_csv(paste0("alpharesults/alpha_", i, ".csv")))
+    counts <- suppressMessages(read_csv(paste0("results1/counts_", i, ".csv")))
     counts[, 1:O] <- counts[, 1:O] + 1 / 10
     divider <- rowSums(counts[, 1:O])
     counts[, 1:O] <- apply(counts[, 1:O], 2, \(x) x / divider)
@@ -683,9 +683,4 @@ testvar <- hostdat %>% group_by(aid, species) %>% summarize(n=n()) %>%
 
 mu <- log(1 / sqrt(1 + testvar))
 sigmasq <- sqrt(log(1 + testvar))
-
-seq(from = 0, to = .495, length.out=100)
-
 ```
-
-We need data on community turnover...
