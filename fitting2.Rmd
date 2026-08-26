@@ -653,19 +653,29 @@ hostdat %>% group_by(aid, species) %>% summarize(n=n()) %>%
     mutate(p = n / n()) %>% ungroup %>% arrange(-p) %>% 
     mutate(p = n() * p / sum(p)) %>% mutate(sp = row_number()) %>% 
     mutate(sim = sort(rlnorm(n(), log(1 / sqrt(1 + var(p))), sqrt(log(1 + var(p)))), decreasing = T)) %>% 
-    pivot_longer(cols = c(p, sim)) %>% 
+    rename(smooth = sim, data = p) %>% 
+    pivot_longer(cols = c(smooth, data)) %>% 
     ggplot(aes(x = sp, y = value, color = name)) +
     geom_point(alpha = 0.05, size = 1) +
-    theme_classic()
+    scale_color_manual(values = c("black", "#db48c3"), name = "") +
+    theme_classic() +
+    ylab("scaled abudance") + xlab("species, rank-ordered") +
+    theme(text = element_text(size = 12, family = "mono")) +
+    guides(color = guide_legend(override.aes = list(alpha = 1)))
 
 hostdat %>% group_by(aid, species) %>% summarize(n=n()) %>% 
     mutate(p = n / n()) %>% ungroup %>% arrange(-p) %>% 
     mutate(p = n() * p / sum(p)) %>% mutate(sp = row_number()) %>% 
-    mutate(sim = sort(rlnorm(n(), log(1 / sqrt(1 + var(p))), sqrt(log(1 + var(p)))), decreasing = T)) %>% 
-    pivot_longer(cols = c(p, sim)) %>% 
-    ggplot(aes(x = sp, y = value, color = name)) +
-    geom_violin() +
-    theme_classic()
+    mutate(sim = sort(rlnorm(n(), log(1 / sqrt(1 + var(p))), sqrt(log(1 + var(p)))), decreasing = T)) %>%
+    rename(smooth = sim, data = p) %>% 
+    pivot_longer(cols = c(smooth, data)) %>% 
+    ggplot(aes(y = name, x = value)) +
+    ggridges::geom_density_ridges(stat = "binline", bins = 40, alpha = 0.8, scale = 3,
+                                  fill = "black", color = "white") +
+    theme_classic() +
+    xlab("scaled abundance") + ylab("") +
+    xlim(0, 4) +
+    theme(text = element_text(size = 12, family = "mono"))
 
 testvar <- hostdat %>% group_by(aid, species) %>% summarize(n=n()) %>% 
     mutate(p = n / n()) %>% ungroup %>% arrange(-p) %>% 
@@ -673,6 +683,9 @@ testvar <- hostdat %>% group_by(aid, species) %>% summarize(n=n()) %>%
 
 mu <- log(1 / sqrt(1 + testvar))
 sigmasq <- sqrt(log(1 + testvar))
+
+seq(from = 0, to = .495, length.out=100)
+
 ```
 
-When a species enters, we pull from the above distribution to assign it a density. Species still go extinct at the same rate, but S and I are replaced by the sum of densities in the transmission rate. The species chosen to become infected is chosen according to its relative density among susceptibles. Well, it could work.
+We need data on community turnover...
