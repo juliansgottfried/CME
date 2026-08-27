@@ -18,7 +18,8 @@ addprocs(SlurmManager())
 # @everywhere f = 0:0.01:0.99
 # @everywhere R0 = 0:0.1:9.9
 
-@everywhere α = [3; 9:16; 26; 28; 30; 33; 58:67; 69:80; 84:89; 91:94]
+# @everywhere α = [3; 9:16; 26; 28; 30; 33; 58:67; 69:80; 84:89; 91:94]
+@everywhere α = [73:80; 84:89; 91:94]
 @everywhere f = 0:0.005:0.495
 @everywhere R0 = 0:0.05:4.95
 
@@ -44,5 +45,5 @@ pmap(eachindex(α)) do i
             end
         end
     end
-    DelimitedFiles.writedlm("/scratch/users/jgottf/CME/results/counts_$i.csv", counts, ',')
+    DelimitedFiles.writedlm("/scratch/users/jgottf/CME/results/counts_$(i + 27).csv", counts, ',')
 end

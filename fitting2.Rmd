@@ -145,6 +145,12 @@ alphas <- NI %>% mutate(cme = factor(NI$cme, levels = unique(NI$cme))) %>%
     group_by(cme) %>% summarize(alpha = round(mean(N, 0))) %>% 
     mutate(cme = varhandle::unfactor(cme))
 alphalist <- sort(unique(alphas$alpha))
+
+alphas %>% arrange(-alpha) %>% mutate(cme = row_number()) %>% 
+    ggplot(aes(x = alpha)) +
+    geom_histogram(fill = "white", color = "black") +
+    theme_classic() +
+    theme(text = element_text(size = 12, family = "mono"))
 ```
 
 ## Retrodiction: setup
@@ -161,6 +167,8 @@ samplepars <- rbind(testcounts %>% filter(R0 == 0, f <= 0.5) %>%
                         select(f, R0) %>% sample_n(100),
                     testcounts %>% filter(R0 > 0, R0 < 5, f <= 0.5) %>% 
                         select(f, R0) %>% sample_n(100))
+# samplepars <- testcounts %>% filter(R0 < 5, f <= 0.5) %>% 
+#                         select(f, R0) %>% sample_n(200)
 ```
 
 ## Retrodiction: fitting
@@ -192,6 +200,7 @@ explore <- data.frame(cbind(testret, samplepars))
 colnames(explore)[1:9] <- c("fhat","fl","fu","R0hat","R0l","R0u","pval4","loglik","pval3")
 
 explore %>% 
+    filter(!(R0l == 0 & R0u == 9.9)) %>% 
     ggplot(aes(x = R0, y = (R0l + R0u) / 2)) +
     geom_linerange(aes(ymin = R0l, ymax = R0u), alpha = 0.15) +
     geom_point(alpha = 0.9, shape = 1) +
@@ -201,6 +210,7 @@ explore %>%
     theme(text = element_text(size = 12, family = "mono"))
 
 explore %>% 
+    filter(!(R0l == 0 & R0u == 9.9)) %>% 
     ggplot(aes(x = f, y = (fl + fu) / 2)) +
     geom_linerange(aes(ymin = fl, ymax = fu), alpha = 0.15) +
     geom_point(alpha = 0.9, shape = 1) +
@@ -258,6 +268,7 @@ write_csv(fits, "fits.csv")
 
 ## Viz
 ```{r}
+fits <- read_csv("fits.csv")
 fits <- fits %>% 
     mutate(across(-cme, as.numeric))
 
@@ -283,7 +294,8 @@ fits %>%
                        values = c("#910027", "#818ade")) +
     theme_classic() +
     ylab("R0") +
-    theme(text = element_text(size = 12, family = "mono"))
+    theme(text = element_text(size = 12, family = "mono"),
+          legend.position = "bottom")
 
 fits %>% 
     arrange(-(fl + fu) / 2) %>% 
@@ -308,7 +320,7 @@ fits %>%
 
 ## Examining specific CMEs
 ```{r}
-tester <- "c800"
+tester <- "c4"
 parfit <- fits[fits$cme == tester, c("fl", "fu", "R0l", "R0u")]
 testcounts <- read_csv(paste0("results1/counts_",
                           which(alphalist == min(alphas$alpha[alphas$cme == tester], 94)),
@@ -329,7 +341,7 @@ cmedat %>%
            freq = freq / sum(freq)) %>% 
     ggplot(aes(x = count, y = freq)) +
     geom_col(width = 1, color = "black", fill = "white")+
-    ylim(0, 1) + xlim(-1, 51) +
+    ylim(0, 1) + xlim(-1, 20) +
     theme_classic() +
     ggtitle(tester) +
     theme(text = element_text(size = 12, family = "mono"),
@@ -338,7 +350,7 @@ cmedat %>%
 data.frame(count = 0:(O - 1), freq = gatherNI[1:O]) %>% 
     ggplot(aes(x = count, y = freq)) +
     geom_col(width = 1, color = "black", fill = "white")+
-    ylim(0, 1) + xlim(-1, 51) +
+    ylim(0, 1) + xlim(-1, 20) +
     theme_classic() +
     ggtitle("best fit") +
     theme(text = element_text(size = 12, family = "mono"),
@@ -456,7 +468,8 @@ data.frame(cme = cmes,
     theme_classic() +
     ylab("p-value") +
     theme(text = element_text(size = 12, family = "mono")) +
-    facet_wrap(~name, ncol = 1, labeller = labeller(name = pval_labs))
+    facet_wrap(~name, ncol = 1, labeller = labeller(name = pval_labs)) +
+    guides(color = guide_legend(override.aes = list(shape = 15)))
 ```
 
 ## Failure of Poisson(alpha) for data
@@ -469,6 +482,7 @@ examineerror %>%
     geom_point(alpha = 0.5) +
     geom_abline(slope = 1, intercept = 0, color = "red", linetype = 2) +
     theme_classic() +
+    xlab("E[alpha]") + ylab("Var[alpha]") +
     theme(text = element_text(size = 12, family = "mono"))
 examineerror %>% filter(ratio > 0.75) %>% select(cme, Ealpha)
 ```
@@ -632,6 +646,16 @@ fits %>%
 
 ## Fitting success
 ```{r}
+fits %>%
+    filter(!(R0u == 9.9 & R0l == 0)) %>%
+    mutate(R0 = (R0l + R0u) / 2) %>%
+    arrange(-loglik) %>%
+    mutate(idx = row_number()) %>% 
+    ggplot(aes(x = loglik)) +
+    geom_histogram(color = "black", fill = "white", bins = 30) +
+    theme_classic() +
+    theme(panel.background = element_rect(fill = '#f2f2f2', colour = 'black'),
+          text = element_text(size = 12, family = "mono"))
 fits %>%
     filter(!(R0u == 9.9 & R0l == 0)) %>%
     mutate(R0 = (R0l + R0u) / 2) %>%
