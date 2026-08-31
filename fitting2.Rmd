@@ -94,8 +94,8 @@ fitting <- function(statistics, counts) {
 N <- 42
 O <- 50
 
-f <- seq(from = 0, to = 0.99, by = 0.01)
-R0 <- seq(from = 0, to = 9.9, by = 0.1)
+f <- seq(from = 0, to = 0.495, by = 0.005)
+R0 <- seq(from = 0, to = 4.95, by = 0.05)
 ```
 
 ## CME data
@@ -153,22 +153,49 @@ alphas %>% arrange(-alpha) %>% mutate(cme = row_number()) %>%
     theme(text = element_text(size = 12, family = "mono"))
 ```
 
+## Convert simulations to correct format
+```{r}
+converter <- function(i) {
+    tmpcounts <- data.frame(t(read.csv(paste0("results2/counts_", i,".csv"), header = F)))
+    tmpcounts$alpha <- alphalist[i]
+    tmpcounts$f <- 0
+    tmpcounts$R0 <- 0
+    for (j in 1:100) {
+        for (k in 1:100) {
+            tmpcounts$f[100 * (j - 1) + k] <- f[j]
+            tmpcounts$R0[100 * (j - 1) + k] <- R0[k]
+        }
+    }
+    shapely <- matrix(0, 10000 * 168, 54)
+    for (j in 1:168) {
+        shapely[c(10000 * (j - 1) + (1:10000)), 51] <- j
+        shapely[c(10000 * (j - 1) + (1:10000)), c(1:50, 52:54)] <- 
+            as.matrix(tmpcounts[, c(50 * (j - 1) + (1:50), 8401:8403)])
+    }
+    shapely <- data.frame(shapely)
+    colnames(shapely)[51:54] <- c("N","alpha","f","R0")
+    write_csv(shapely, paste0("results3/counts_", i,".csv"))
+}
+for (i in 1:43) {
+    print(i)
+    converter(i)
+}
+```
+
 ## Retrodiction: setup
 ```{r}
 testalpha <- 33
-testcounts <- read_csv(paste0("results1/counts_", which(alphalist == testalpha),".csv"))
+testcounts <- read_csv(paste0("results2/counts_", which(alphalist == testalpha), ".csv"))
 testcounts[, 1:O] <- testcounts[, 1:O] + 1 / 10
 rowsums <- rowSums(testcounts[, 1:O])
 testcounts[, 1:O] <- testcounts[, 1:O] %>% 
     mutate_all(\(x) x / rowsums)
 
 condN <- rpois(N, testalpha)
-samplepars <- rbind(testcounts %>% filter(R0 == 0, f <= 0.5) %>% 
+samplepars <- rbind(testcounts %>% filter(R0 == 0) %>% 
                         select(f, R0) %>% sample_n(100),
-                    testcounts %>% filter(R0 > 0, R0 < 5, f <= 0.5) %>% 
+                    testcounts %>% filter(R0 > 0) %>% 
                         select(f, R0) %>% sample_n(100))
-# samplepars <- testcounts %>% filter(R0 < 5, f <= 0.5) %>% 
-#                         select(f, R0) %>% sample_n(200)
 ```
 
 ## Retrodiction: fitting
@@ -228,14 +255,14 @@ explore %>%
     theme_classic() +
     theme(text = element_text(size = 12, family = "mono"))
 
-explore %>%
-    mutate(is0 = ifelse(R0 == 0, "R0 = 0", "R0 > 0")) %>% 
-    ggplot(aes(x = pval3)) +
-    geom_histogram(color = "black", fill = "white") + 
-    facet_wrap(~is0) +
-    xlab("p-value") +
-    theme_classic() +
-    theme(text = element_text(size = 12, family = "mono"))
+# explore %>%
+#     mutate(is0 = ifelse(R0 == 0, "R0 = 0", "R0 > 0")) %>% 
+#     ggplot(aes(x = pval3)) +
+#     geom_histogram(color = "black", fill = "white") + 
+#     facet_wrap(~is0) +
+#     xlab("p-value") +
+#     theme_classic() +
+#     theme(text = element_text(size = 12, family = "mono"))
 ```
 
 ## CME fitting
@@ -246,14 +273,14 @@ fits <- data.frame(cme = cmes,
                    pval = 1,
                    loglik = -Inf)
 idx <- 1
-for (i in 1:45) {
+for (i in 1:43) {
     tmpalpha <- alphalist[i]
-    counts <- suppressMessages(read_csv(paste0("results1/counts_", i, ".csv")))
+    counts <- suppressMessages(read_csv(paste0("results2/counts_", i, ".csv")))
     counts[, 1:O] <- counts[, 1:O] + 1 / 10
     divider <- rowSums(counts[, 1:O])
     counts[, 1:O] <- apply(counts[, 1:O], 2, \(x) x / divider)
     
-    if (i == 45) { tmpcmes <- alphas$cme[alphas$alpha >= tmpalpha]
+    if (i == 43) { tmpcmes <- alphas$cme[alphas$alpha >= tmpalpha]
     } else tmpcmes <- alphas$cme[alphas$alpha == tmpalpha]
     
     for (j in 1:length(tmpcmes)) {
@@ -263,18 +290,18 @@ for (i in 1:45) {
         idx <- idx + 1
     }
 }
-write_csv(fits, "fits.csv")
+write_csv(fits, "fits2.csv")
 ```
 
 ## Viz
 ```{r}
-fits <- read_csv("fits.csv")
+fits <- read_csv("fits2.csv")
 fits <- fits %>% 
     mutate(across(-cme, as.numeric))
 
 NI %>% group_by(cme) %>% summarize(test = sum(I)/sum(N)) %>% 
     right_join(fits, by = "cme") %>% 
-    mutate(failed = R0u == 9.9 & R0l == 0,
+    mutate(failed = R0u == 4.95 & R0l == 0,
            test = round(test, 3)) %>% 
     group_by(test) %>% summarize(pfail = mean(failed)) %>% 
     ggplot(aes(x = test, y = pfail)) +
@@ -321,12 +348,12 @@ fits %>%
 ## Examining specific CMEs
 ```{r}
 tester <- "c4"
-parfit <- fits[fits$cme == tester, c("fl", "fu", "R0l", "R0u")]
-testcounts <- read_csv(paste0("results1/counts_",
-                          which(alphalist == min(alphas$alpha[alphas$cme == tester], 94)),
+parfit <- fits[fits$cme == tester, c("fhat", "R0hat")]
+testcounts <- read_csv(paste0("results2/counts_",
+                          which(alphalist == min(alphas$alpha[alphas$cme == tester], 92)),
                           ".csv"))
-testcounts <- testcounts %>% filter(round(f, 2) == with(parfit, round((fl + fu) / 2, 2)), 
-                                    round(R0, 1) == with(parfit, round((R0l + R0u) / 2, 1)))
+testcounts <- testcounts %>% filter(round(f, 3) == with(parfit, round(fhat, 3)), 
+                                    round(R0, 2) == with(parfit, round(R0hat, 2)))
 gatherNI <- colSums(testcounts[NI[NI$cme == tester, "N"], ])
 gatherNI <- gatherNI / sum(gatherNI)
 
@@ -491,14 +518,14 @@ examineerror %>% filter(ratio > 0.75) %>% select(cme, Ealpha)
 ```{r}
 sigs <- data.frame(cme = cmes, pval3 = 1, pval4 = 0.5)
 idx <- 1
-for (i in 1:45) {
+for (i in 1:43) {
     tmpalpha <- alphalist[i]
-    counts <- suppressMessages(read_csv(paste0("results1/counts_", i, ".csv")))
+    counts <- suppressMessages(read_csv(paste0("results2/counts_", i, ".csv")))
     counts[, 1:O] <- counts[, 1:O] + 1 / 10
     divider <- rowSums(counts[, 1:O])
     counts[, 1:O] <- apply(counts[, 1:O], 2, \(x) x / divider)
     
-    if (i == 45) { tmpcmes <- alphas$cme[alphas$alpha >= tmpalpha]
+    if (i == 43) { tmpcmes <- alphas$cme[alphas$alpha >= tmpalpha]
     } else tmpcmes <- alphas$cme[alphas$alpha == tmpalpha]
     
     for (j in 1:length(tmpcmes)) {
@@ -548,14 +575,14 @@ examine %>%
 ```{r}
 Isim <- list()
 idx <- 1
-for (i in 1:45) {
+for (i in 1:43) {
     tmpalpha <- alphalist[i]
-    counts <- suppressMessages(read_csv(paste0("results1/counts_", i, ".csv")))
+    counts <- suppressMessages(read_csv(paste0("results2/counts_", i, ".csv")))
     counts[, 1:O] <- counts[, 1:O] + 1 / 10
     divider <- rowSums(counts[, 1:O])
     counts[, 1:O] <- apply(counts[, 1:O], 2, \(x) x / divider)
     
-    if (i == 45) { tmpcmes <- alphas$cme[alphas$alpha >= tmpalpha]
+    if (i == 43) { tmpcmes <- alphas$cme[alphas$alpha >= tmpalpha]
     } else tmpcmes <- alphas$cme[alphas$alpha == tmpalpha]
     
     for (j in 1:length(tmpcmes)) {
@@ -600,7 +627,7 @@ mean((fits %>% filter(fu == 0) %>% pull(cme)) %in% problems)
 ## Plot for proposal
 ```{r}
 fits %>% 
-    filter(!(R0u == 9.9 & R0l == 0)) %>% 
+    filter(!(R0u == 4.95 & R0l == 0)) %>% 
     mutate(R0 = (R0l + R0u) / 2) %>% 
     ggplot(aes(x = R0)) +
     geom_bar(fill = "black") +
@@ -608,7 +635,7 @@ fits %>%
     ylab("count") + xlab(expression(R["0"])) +
     theme(text = element_text(size = 12, family = "mono"))
 fits %>% 
-    filter(!(R0u == 9.9 & R0l == 0)) %>% 
+    filter(!(R0u == 4.95 & R0l == 0)) %>% 
     mutate(R0 = (R0l + R0u) / 2) %>% 
     ggplot(aes(x = R0, fill = pval > 0.05)) +
     geom_bar(position = position_stack()) +
@@ -620,7 +647,7 @@ fits %>%
     theme(text = element_text(size = 12, family = "mono"))
 fits %>% 
     arrange(-(R0l + R0u) / 2) %>% 
-    filter(!(R0u == 9.9 & R0l == 0)) %>% 
+    filter(!(R0u == 4.95 & R0l == 0)) %>% 
     mutate(cme = row_number()) %>% 
     ggplot(aes(x = cme, y = (R0l + R0u) / 2)) +
     geom_point(shape = 3) +
@@ -630,7 +657,7 @@ fits %>%
     theme(text = element_text(size = 12, family = "mono"))
 fits %>% 
     arrange(-(R0l + R0u) / 2) %>% 
-    filter(!(R0u == 9.9 & R0l == 0)) %>% 
+    filter(!(R0u == 4.95 & R0l == 0)) %>% 
     mutate(cme = row_number(), sig = pval < 0.05) %>% 
     ggplot(aes(x = cme, y = (R0l + R0u) / 2, color = !sig)) +
     geom_point(shape = 3) +
@@ -639,7 +666,7 @@ fits %>%
                        labels = c("< 0.05","n.s."),
                        values = c("#6972c9", "black")) +
     theme_classic() +
-    ylab("R0 within") + xlab("CME (rank-ordered)") +
+    ylab("R0-within") + xlab("mobile element, rank-ordered") +
     theme(text = element_text(size = 12, family = "mono"),
           legend.position = "bottom")
 ```
@@ -647,7 +674,7 @@ fits %>%
 ## Fitting success
 ```{r}
 fits %>%
-    filter(!(R0u == 9.9 & R0l == 0)) %>%
+    filter(!(R0u == 4.95 & R0l == 0)) %>%
     mutate(R0 = (R0l + R0u) / 2) %>%
     arrange(-loglik) %>%
     mutate(idx = row_number()) %>% 
@@ -657,7 +684,7 @@ fits %>%
     theme(panel.background = element_rect(fill = '#f2f2f2', colour = 'black'),
           text = element_text(size = 12, family = "mono"))
 fits %>%
-    filter(!(R0u == 9.9 & R0l == 0)) %>%
+    filter(!(R0u == 4.95 & R0l == 0)) %>%
     mutate(R0 = (R0l + R0u) / 2) %>%
     arrange(-loglik) %>%
     mutate(idx = row_number()) %>% 
