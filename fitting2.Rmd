@@ -151,11 +151,14 @@ alphas %>% arrange(-alpha) %>% mutate(cme = row_number()) %>%
     geom_histogram(fill = "white", color = "black") +
     theme_classic() +
     theme(text = element_text(size = 12, family = "mono"))
+
+mean(NI$N[NI$cme == "c4"])
+var(NI$N[NI$cme == "c4"])
 ```
 
 ## Convert simulations to correct format
 ```{r}
-converter <- function(i) {
+# converter <- function(i) {
     tmpcounts <- data.frame(t(read.csv(paste0("results2/counts_", i,".csv"), header = F)))
     tmpcounts$alpha <- alphalist[i]
     tmpcounts$f <- 0
@@ -176,10 +179,10 @@ converter <- function(i) {
     colnames(shapely)[51:54] <- c("N","alpha","f","R0")
     write_csv(shapely, paste0("results3/counts_", i,".csv"))
 }
-for (i in 1:43) {
-    print(i)
-    converter(i)
-}
+# for (i in 1:43) {
+#     print(i)
+#     converter(i)
+# }
 ```
 
 ## Retrodiction: setup
@@ -343,6 +346,10 @@ fits %>%
     theme_classic() +
     ylab("p-value") +
     theme(text = element_text(size = 12, family = "mono"))
+
+fits %>% ggplot(aes(y = (R0u + R0l) / 2, x = (fu + fl) / 2)) +
+    geom_point() +
+    theme_classic()
 ```
 
 ## Examining specific CMEs
@@ -402,13 +409,6 @@ for (i in 1:length(cmes)) {
         pull(present) %>% sum
     pval1[i] <- poisbinom::ppoisbinom(obs, pi)
 }
-data.frame(cme = 1:length(cmes), pval = sort(pval1, decreasing = T)) %>% 
-    ggplot(aes(x = cme, y = pval)) +
-    geom_point(alpha = 0.8, shape = 3) +
-    geom_hline(yintercept = 0.05, color = "red", linetype = 2) +
-    theme_classic() +
-    ylab("p-value") +
-    theme(text = element_text(size = 12, family = "mono"))
 ```
 
 ## Permutation --> Model: step 2
@@ -430,13 +430,6 @@ for (i in 1:length(cmes)) {
         pull(present) %>% sum
     pval2[i] <- poisbinom::ppoisbinom(obs, pi)
 }
-data.frame(cme = 1:length(cmes), pval = sort(pval2, decreasing = T)) %>% 
-    ggplot(aes(x = cme, y = pval)) +
-    geom_point(alpha = 0.8, shape = 3) +
-    geom_hline(yintercept = 0.05, color = "red", linetype = 2) +
-    theme_classic() +
-    ylab("p-value") +
-    theme(text = element_text(size = 12, family = "mono"))
 ```
 
 ## Permutation --> Model: step 3
@@ -452,15 +445,6 @@ for (i in 1:length(cmes)) {
         pull(present) %>% sum
     pval3[i] <- poisbinom::ppoisbinom(obs, pi)
 }
-data.frame(pval = pval3, alpha = alphas$alpha) %>% 
-    arrange(-pval) %>% 
-    mutate(cme = row_number()) %>% 
-    ggplot(aes(x = cme, y = pval)) +
-    geom_point(alpha = 0.8, shape = 3) +
-    geom_hline(yintercept = 0.05, color = "red", linetype = 2) +
-    theme_classic() +
-    ylab("p-value") +
-    theme(text = element_text(size = 12, family = "mono"))
 ```
 
 ## All steps
@@ -486,7 +470,7 @@ data.frame(cme = cmes,
     left_join(fits %>% select(cme, fu), by = "cme") %>% 
     arrange(-pval4) %>% mutate(cme = row_number()) %>% 
     pivot_longer(pval0:pval4) %>% 
-    ggplot(aes(x = cme, y = value, color = fu == 0)) +
+    ggplot(aes(x = cme, y = value)) +
     geom_point(alpha = 0.8, shape = 3) +
     scale_color_manual(values = c("black", "grey"), 
                        labels = c("f = 0","f > 0"),
@@ -506,12 +490,12 @@ examineerror <- NI %>% group_by(cme) %>%
     mutate(ratio = Ealpha/Valpha)
 examineerror %>%
     ggplot(aes(x = Ealpha, y = Valpha)) +
-    geom_point(alpha = 0.5) +
+    geom_point(shape = 1) +
     geom_abline(slope = 1, intercept = 0, color = "red", linetype = 2) +
     theme_classic() +
-    xlab("E[alpha]") + ylab("Var[alpha]") +
+    coord_equal()+
+    xlab("mean") + ylab("variance") +
     theme(text = element_text(size = 12, family = "mono"))
-examineerror %>% filter(ratio > 0.75) %>% select(cme, Ealpha)
 ```
 
 ## Significance retrodiction under fitted parameters
@@ -700,33 +684,23 @@ fits %>%
 
 ## Species density distribution
 ```{r}
-hostdat %>% group_by(aid, species) %>% summarize(n=n()) %>% 
+hostdat %>%
+    group_by(aid, species) %>% summarize(n=n()) %>% 
     mutate(p = n / n()) %>% ungroup %>% arrange(-p) %>% 
     mutate(p = n() * p / sum(p)) %>% mutate(sp = row_number()) %>% 
-    mutate(sim = sort(rlnorm(n(), log(1 / sqrt(1 + var(p))), sqrt(log(1 + var(p)))), decreasing = T)) %>% 
+    mutate(sim = sort(
+        rlnorm(n(), log(1 / sqrt(1 + var(p))), sqrt(log(1 + var(p)))), 
+        decreasing = T)) %>% 
     rename(smooth = sim, data = p) %>% 
     pivot_longer(cols = c(smooth, data)) %>% 
     ggplot(aes(x = sp, y = value, color = name)) +
-    geom_point(alpha = 0.05, size = 1) +
-    scale_color_manual(values = c("black", "#db48c3"), name = "") +
+    geom_point(shape = 1, stroke = 0.05) +
+    scale_color_manual(values = c("black", "#5bc4f0"), name = "", labels = c("data", "parametric")) +
     theme_classic() +
     ylab("scaled abudance") + xlab("species, rank-ordered") +
     theme(text = element_text(size = 12, family = "mono")) +
-    guides(color = guide_legend(override.aes = list(alpha = 1)))
-
-hostdat %>% group_by(aid, species) %>% summarize(n=n()) %>% 
-    mutate(p = n / n()) %>% ungroup %>% arrange(-p) %>% 
-    mutate(p = n() * p / sum(p)) %>% mutate(sp = row_number()) %>% 
-    mutate(sim = sort(rlnorm(n(), log(1 / sqrt(1 + var(p))), sqrt(log(1 + var(p)))), decreasing = T)) %>%
-    rename(smooth = sim, data = p) %>% 
-    pivot_longer(cols = c(smooth, data)) %>% 
-    ggplot(aes(y = name, x = value)) +
-    ggridges::geom_density_ridges(stat = "binline", bins = 40, alpha = 0.8, scale = 3,
-                                  fill = "black", color = "white") +
-    theme_classic() +
-    xlab("scaled abundance") + ylab("") +
-    xlim(0, 4) +
-    theme(text = element_text(size = 12, family = "mono"))
+    guides(color = guide_legend(override.aes = list(shape = 19, stroke = 1))) +
+    theme(legend.position = "bottom")
 
 testvar <- hostdat %>% group_by(aid, species) %>% summarize(n=n()) %>% 
     mutate(p = n / n()) %>% ungroup %>% arrange(-p) %>% 

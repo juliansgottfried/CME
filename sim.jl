@@ -23,7 +23,7 @@ function loop!(Is, nN, G, inter, t, α, f, R0)
     t .= 0
     while g < G
         N = S + I
-        if N > 0 & N <= nN
+        if N > 0 && N <= nN
             if g ≥ inter * t[N]
                 t[N] += 1
                 Is[N, t[N]] = I
