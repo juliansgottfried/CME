@@ -1,0 +1,177 @@
+---
+title: "fitting2"
+author: "Julian Gottfried"
+date: "2026-08-21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Setup
+```{r}
+library(tidyverse)
+setwd("~/Desktop/CME")
+```
+
+## Functions
+```{r}
+fitting <- function(statistics, counts) {
+    factor <- 0
+    loglik <- rep(0, 100 * 100)
+    for (j in unique(statistics$N)) {
+        if (j == 0) next
+        slimdata <- statistics %>% filter(N == j)
+        slimI <- as.numeric(unname(table(factor(slimdata$I, levels = 0:(O-1)))))
+        factor <- factor + log(factorial(sum(slimI))) - sum(log(factorial(slimI)))
+        slimfreq <- counts %>% filter(N == j)
+        loglik <- loglik + apply(slimfreq[, 1:O], 1, \(x) sum(slimI * log(x)))
+    }
+    loglik <- loglik + factor + sum(dnbinom(unique(statistics$N), size, p, log = T))
+    cbind(loglik, slimfreq %>% select(R0:phi))
+}
+```
+
+## Hyperparams
+```{r}
+N <- 42
+O <- 50
+
+R0 <- seq(from = 0, by = 0.05, to = 5 - 0.05)
+pi <- seq(from = 0, by = 0.0025, to = 0.25 - 0.0025)
+phi <- seq(0, by = 0.1, to = 10 - 0.1)
+
+mu <- 97
+var <- 516
+lambda <- 516 / 97 - 1
+
+p = mu / var
+size = p * mu / (1 - p)
+```
+
+## CME data
+```{r}
+cmemat <- read.table("eitan_data/host_cme_matrix.txt", header = T, sep = "\t")
+cmes <- colnames(cmemat %>% select(-host_id))
+cmemat$aid <- str_split(cmemat$host_id, "_", simplify = T)[, 1]
+cmemat$genome <- str_split(cmemat$host_id, "_", simplify = T)[, 2]
+hostdat <-  read.table("eitan_data/hosts.txt", header = T, sep = "\t")
+cmemat <- left_join(cmemat, hostdat %>% select(species, genus, family, host_id), by = "host_id")
+cmetab <- read.table("eitan_data/cme_table.txt", header = T, sep = "\t")
+cmedat <- cmemat %>% 
+    group_by(aid, species) %>% 
+    summarize_at(cmes, \(x) sum(x) != 0) %>% 
+    select(-species) %>% 
+    pivot_longer(cols = -aid, names_to = "cme") %>% 
+    group_by(cme, aid) %>% 
+    summarize(count = sum(value), .groups = "drop")
+```
+
+## N and I data
+```{r}
+fams <- cmemat %>% filter(c4) %>% pull(family) %>% unique
+Nstats <- cmemat %>% filter(family %in% fams) %>% 
+    group_by(aid) %>% select(aid, species) %>%
+    distinct %>% summarize(N = n())
+Istats <- cmemat %>% filter(c4) %>% group_by(aid, species) %>% 
+        summarize(n = n()) %>% summarize(I = n())
+statistics <- left_join(Nstats, Istats, by = "aid")
+statistics <- rbind(statistics,
+                    data.frame(aid = unique(hostdat$aid), 
+                               N = 0, I = NA)[!(unique(hostdat$aid) %in% statistics$aid), ])
+statistics[is.na(statistics)] <- 0
+statistics <- statistics %>% select(-aid)
+```
+
+## Convert simulations to correct format
+```{r}
+converter <- function(i) {
+    tmpcounts <- data.frame(t(read.csv(paste0("c4results/counts_", i,".csv"), header = F)))
+    tmpcounts$R0 <- R0[i]
+    tmpcounts$pi <- 0
+    tmpcounts$phi <- 0
+    for (j in 1:100) {
+        for (k in 1:100) {
+            tmpcounts$pi[100 * (j - 1) + k] <- pi[j]
+            tmpcounts$phi[100 * (j - 1) + k] <- phi[k]
+        }
+    }
+    shapely <- matrix(0, 10000 * 160, 54)
+    for (j in 1:160) {
+        shapely[10000 * (j - 1) + (1:10000), 51] <- j
+        shapely[10000 * (j - 1) + (1:10000), c(1:50, 52:54)] <-
+            as.matrix(tmpcounts[, c(50 * (j - 1) + (1:50), 8001:8003)])
+    }
+    shapely <- data.frame(shapely)
+    colnames(shapely)[51:54] <- c("N","R0","pi","phi")
+    write_csv(shapely, paste0("c4results_reshape/counts_", i,".csv"))
+}
+for (i in c(1:100)) {
+    print(i)
+    converter(i)
+}
+```
+
+## Fitting
+```{r}
+logliks <- matrix(0, 100 ^ 3, 4)
+readandfit <- function(i) {
+    counts <- suppressMessages(read_csv(paste0("c4results/counts_", i, ".csv")))
+    counts[, 1:O] <- counts[, 1:O] + 1 / 10
+    divider <- rowSums(counts[, 1:O])
+    counts[, 1:O] <- apply(counts[, 1:O], 2, \(x) x / divider)
+    fitting(statistics, counts)
+}
+for (i in 1:100) {
+    print(i)
+    logliks[(1:10000) + 10000 * (i - 1), ] <- as.matrix(readandfit(i))
+}
+logliks <- as.data.frame(logliks)
+colnames(logliks) <- c("loglik", "R0", "pi", "phi")
+write_csv(logliks, "logliks.csv")
+
+getinterval <- function(var) {
+    var <- "pi"
+    profiled <- logliks %>% group_by(!!!syms(var)) %>% summarize(loglik = max(loglik))
+    plot(profiled[1:10, ])
+    interval <- 2 * (max(logliks$loglik) - profiled$loglik) <= qchisq(0.95, 1)
+    range(unlist(profiled[, var])[interval])
+}
+R0hat <- median(getinterval("R0"))
+pihat <- median(getinterval("pi"))
+phihat <- median(getinterval("phi"))
+```
+
+## Examining c4
+```{r}
+readcounts <- read_csv(paste0("c4results/counts_", which(R0 == R0hat), ".csv"))
+plotcounts <- readcounts %>% 
+    filter(round(pi, 4) == round(pihat, 4), round(phi, 1) == round(phihat, 1)) 
+
+gatherNI <- colSums(plotcounts[statistics$N, 1:O])
+gatherNI <- gatherNI / sum(gatherNI)
+
+cmedat %>%
+    filter(cme == "c4") %>% pull(count) %>% 
+    factor(levels = 0:(O-1)) %>% table %>% data.frame %>% 
+    rename(count = '.', freq = Freq) %>% 
+    mutate(count = as.numeric(count) - 1, 
+           freq = freq / sum(freq)) %>% 
+    ggplot(aes(x = count, y = freq)) +
+    geom_col(width = 1, color = "black", fill = "white")+
+    ylim(0, 1) + xlim(-1, 20) +
+    theme_classic() +
+    ggtitle("c4") +
+    theme(text = element_text(size = 12, family = "mono"),
+          legend.position = "bottom")
+
+data.frame(count = 0:(O - 1), freq = gatherNI[1:O]) %>% 
+    ggplot(aes(x = count, y = freq)) +
+    geom_col(width = 1, color = "black", fill = "white")+
+    ylim(0, 1) + xlim(-1, 20) +
+    theme_classic() +
+    ggtitle("best fit") +
+    theme(text = element_text(size = 12, family = "mono"),
+          legend.position = "bottom")
+```

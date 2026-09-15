@@ -6,9 +6,13 @@ addprocs(SlurmManager())
 @everywhere include("/scratch/users/jgottf/CME/simnb.jl")
 @everywhere import StatsBase, DelimitedFiles
 
-@everywhere R0 = 0:0.05:(5 - 0.05)
-@everywhere π = 0:0.0025:(0.25 - 0.0025)
-@everywhere ϕ = 0:0.1:(10 - 0.1)
+# @everywhere R0 = 0:0.05:(5 - 0.05)
+# @everywhere π = 0:0.0025:(0.25 - 0.0025)
+# @everywhere ϕ = 0:0.1:(10 - 0.1)
+
+@everywhere R0 = 0:0.025:(2.5 - 0.025)
+@everywhere π = 0:0.0001:(0.01 - 0.0001)
+@everywhere ϕ = 0
 
 @everywhere μ = 97
 @everywhere σ2 = 516

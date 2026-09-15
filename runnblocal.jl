@@ -1,9 +1,9 @@
 include("simnb.jl")
 import StatsBase, DelimitedFiles
 
-R0 = 5 - 0.05
-π = 0.01
-ϕ = 0:0.1:(10 - 0.1)
+R0 = 0:0.025:(2.5 - 0.025)
+π = 0:0.0001:(0.01 - 0.0001)
+ϕ = 0
 
 μ = 97
 σ2 = 516
@@ -16,7 +16,7 @@ nbin = 50
 
 nN = 160
 
-@time for i in eachindex(R0)
+for i in eachindex(R0)
     counts = zeros(Int, nbin * nN, length(π) * length(ϕ))
     len = Int(G / inter)
     all = zeros(Int, nN, J * len)
@@ -33,5 +33,5 @@ nN = 160
             end
         end
     end
-    # DelimitedFiles.writedlm("/scratch/users/jgottf/CME/results/counts_$(i).csv", counts, ',')
+    DelimitedFiles.writedlm("results_local/counts_$(i).csv", counts, ',')
 end
