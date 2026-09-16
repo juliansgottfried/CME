@@ -123,26 +123,27 @@ getinterval <- function(var) {
     bounds <- range(unlist(profiled$var)[profiled$interval])
     profiled$interval <- with(profiled, ifelse(var >= bounds[1] & var <= bounds[2], T, F))
 
-    hat <- median(range(profiled$var[profiled$interval]))
+    hat <- unlist(logliks[var])[which.max(logliks$loglik)]
+    med <- median(range(profiled$var[profiled$interval]))
     
     plot <- profiled %>%
         ggplot(aes(x = var, y = loglik, color = interval)) +
         geom_point(shape = 1, stroke = 0.8) +
-        geom_vline(xintercept = hat, linetype = 2, color = "#6eecff") +
+        geom_vline(xintercept = med, linetype = 2, color = "#6eecff") +
         scale_color_manual(values = c("black", "#ff4da3")) +
         guides(color = "none") +
         xlab(var) + ylab("loglik") +
         theme_classic() +
         theme(text = element_text(size = 12, family = "mono"))
     
-    list(plot, hat)
+    list(plot, hat, med)
 }
 
 getinterval("R0")[[1]]
 getinterval("pi")[[1]]
 
-R0hat <- round(getinterval("R0")[[2]], 4)
-pihat <- round(getinterval("pi")[[2]], 5)
+R0hat <- round(getinterval("R0")[[3]], 4)
+pihat <- round(getinterval("pi")[[3]], 5)
 ```
 
 ## Examining c4
