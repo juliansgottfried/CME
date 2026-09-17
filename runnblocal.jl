@@ -1,13 +1,13 @@
 include("simnb.jl")
 import StatsBase, DelimitedFiles
 
-R0 = 0:0.025:(2.5 - 0.025)
-π = 0:0.0001:(0.01 - 0.0001)
-ϕ = 0
-
 μ = 97
 σ2 = 516
 λ = σ2 / μ - 1
+
+R0 = (0:0.02:(2 - 0.02)) ./ 100
+π = 0:0.0001:(0.01 - 0.0001)
+ϕ = 0
 
 J = 100
 G = 50
@@ -33,5 +33,5 @@ for i in eachindex(R0)
             end
         end
     end
-    DelimitedFiles.writedlm("results_local/counts_$(i).csv", counts, ',')
+    DelimitedFiles.writedlm("results/counts_$(i).csv", counts, ',')
 end

@@ -38,7 +38,7 @@ fitting <- function(statistics, counts) {
 N <- 42
 O <- 50
 
-R0 <- seq(from = 0, by = 0.025, to = 2.5 - 0.025)
+R0 <- seq(from = 0, by = 0.02, to = 2 - 0.02) / 100
 pi <- seq(from = 0, by = 0.0001, to = 0.01 - 0.0001)
 
 mu <- 97
@@ -86,7 +86,7 @@ statistics <- statistics %>% select(-aid)
 ## Convert simulations to correct format
 ```{r}
 converter <- function(i) {
-    tmpcounts <- data.frame(t(read.csv(paste0("results_local/counts_", i,".csv"), header = F)))
+    tmpcounts <- data.frame(t(read.csv(paste0("results/counts_", i,".csv"), header = F)))
     tmpcounts$R0 <- R0[i]
     tmpcounts$pi <- pi
     shapely <- matrix(0, 100 * 160, 53)
@@ -126,10 +126,11 @@ getinterval <- function(var) {
     hat <- unlist(logliks[var])[which.max(logliks$loglik)]
     med <- median(range(profiled$var[profiled$interval]))
     
+    isR0 = var == "R0"
     plot <- profiled %>%
-        ggplot(aes(x = var, y = loglik, color = interval)) +
+        ggplot(aes(x = var * mu ^ isR0, y = loglik, color = interval)) +
         geom_point(shape = 1, stroke = 0.8) +
-        geom_vline(xintercept = med, linetype = 2, color = "#6eecff") +
+        geom_vline(xintercept = med * mu ^ isR0, linetype = 2, color = "#6eecff") +
         scale_color_manual(values = c("black", "#ff4da3")) +
         guides(color = "none") +
         xlab(var) + ylab("loglik") +
@@ -148,7 +149,7 @@ pihat <- round(getinterval("pi")[[3]], 5)
 
 ## Examining c4
 ```{r}
-plotcounts <- counts %>% filter(R0 == R0hat, pi == pihat) 
+plotcounts <- counts %>% filter(R0 == R0hat, pi == round(pihat, 4)) 
 
 gatherNI <- colSums(plotcounts[statistics$N, 1:O])
 gatherNI <- gatherNI / sum(gatherNI)

@@ -6,7 +6,7 @@ function iterate(g, S, I, β, π, ϕ, μ, λ)
     Iup = π * (μ + λ * N)
     Sdown = (1 + λ) * S
     Idown = (1 + λ) * I
-    SdownIup = (π * ϕ * λ + β * I / N ) * S
+    SdownIup = (π * ϕ * λ + β * I) * S
     IdownSup = (1 - π) * ϕ * λ * I
     rate = Sup + Iup + Sdown + Idown + SdownIup + IdownSup
     g -= 1 / rate * log(rand())
