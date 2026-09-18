@@ -20,15 +20,15 @@ setwd("~/Desktop/CME")
 fitting <- function(statistics, counts) {
     factor <- 0
     loglik <- rep(0, 100 * 100)
-    for (j in Ns) {
+    for (j in unique(statistics$N)) {
         if (j == 0) next
         slimdata <- statistics %>% filter(N == j)
         slimI <- as.numeric(unname(table(factor(slimdata$I, levels = 0:(O-1)))))
         factor <- factor + log(factorial(sum(slimI))) - sum(log(factorial(slimI)))
-        slimfreq <- counts %>% filter(mu == j)
+        slimfreq <- counts %>% filter(N == j)
         loglik <- loglik + apply(slimfreq[, 1:O], 1, \(x) sum(slimI * log(x)))
     }
-    loglik <- loglik + factor + sum(dpois(statistics$N, statistics$N, log = T))
+    loglik <- loglik + factor + sum(dnbinom(statistics$N, size, p, log = T))
     cbind(loglik, slimfreq %>% select(c(R0, pi)))
 }
 ```
@@ -38,15 +38,22 @@ fitting <- function(statistics, counts) {
 N <- 42
 O <- 50
 
-R0 <- seq(from = 0, by = 0.02, to = 2 - 0.02) / 100
-pi <- seq(from = 0, by = 0.0001, to = 0.01 - 0.0001)
+R0 <- seq(from = 0, by = 0.001, to = 0.1 - 0.001)
+pi <- seq(from = 0, by = 0.0005, to = 0.05 - 0.0005)
+mus <- 1:150
 
 mu <- 97
 var <- 516
-lambda <- 516 / 97 - 1
 
 p = mu / var
 size = p * mu / (1 - p)
+
+shape = size
+scale = (1 - p) / p
+
+mixture <- sapply(mus, \(x) pgamma(x, shape = shape, scale = scale) - 
+           pgamma(x - 1, shape = shape, scale = scale))
+const <- sum(mixture)
 ```
 
 ## CME data
@@ -81,54 +88,48 @@ statistics <- rbind(statistics,
                                N = 0, I = NA)[!(unique(hostdat$aid) %in% statistics$aid), ])
 statistics[is.na(statistics)] <- 0
 statistics <- statistics %>% select(-aid)
-
-Ns <- sort(unique(statistics$N))
 ```
 
 ## Convert simulations to correct format
 ```{r}
 converter <- function(i) {
-    tmpcounts <- data.frame(t(read.csv(paste0("results/counts_", i,".csv"), header = F)))
-    tmpcounts$R0 <- R0[i]
-    tmpcounts$pi <- 0
-    tmpcounts$mu <- 0
+    tmpcounts <- t(read.csv(paste0("results/counts_", i,".csv"), header = F))
+    mixed <- matrix(0, length(pi), 8002)
     for (j in 1:length(pi)) {
-        for (k in 1:length(Ns)) {
-            tmpcounts$pi[length(Ns) * (j - 1) + k] <- pi[j]
-            tmpcounts$mu[length(Ns) * (j - 1) + k] <- Ns[k]
-        }
+        mixed[j, 1:8000] <- apply(tmpcounts[(1:150) + 150 * (j - 1), 1:8000], 2, 
+              \(x) sum(x * mixture / const))
+        
     }
-    shapely <- matrix(0, 3200 * 160, 54)
+    mixed[, 8001] <- R0[i]
+    mixed[, 8002] <- pi
+    shapely <- matrix(0, 100 * 160, 53)
     for (j in 1:160) {
-        shapely[3200 * (j - 1) + (1:3200), 51] <- j
-        shapely[3200 * (j - 1) + (1:3200), c(1:50, 52:54)] <-
-            as.matrix(tmpcounts[, c(50 * (j - 1) + (1:50), 8001:8003)])
+        shapely[100 * (j - 1) + (1:100), 51] <- j
+        shapely[100 * (j - 1) + (1:100), c(1:50, 52:53)] <-
+            as.matrix(mixed[, c(50 * (j - 1) + (1:50), 8001:8002)])
     }
-    colnames(shapely) <- c(paste0("X", 1:50), "N", "R0", "pi", "mu")
-    shapely[shapely[, "N"] == shapely[, "mu"], ]
+    colnames(shapely) <- c(paste0("X", 1:50), "N", "R0", "pi")
+    shapely
 }
 
-shapeliest <- matrix(0, 3200 * 100, 54)
+shapeliest <- matrix(0, 16000 * 100, 53)
 for (i in 1:100) {
     print(i)
-    shapeliest[(1:3200) + 3200 * (i - 1), ] <- converter(i)
+    shapeliest[(1:16000) + 16000 * (i - 1), ] <- converter(i)
 }
 shapeliestdf <- data.frame(shapeliest)
-colnames(shapeliestdf)[51:54] <- c("N", "R0", "pi", "mu")
-
-write_csv(shapeliestdf %>% select(-N), "c4_marc.csv")
+colnames(shapeliestdf)[51:53] <- c("N", "R0", "pi")
+write_csv(shapeliestdf, "c4_marc_2.csv")
 ```
 
 ## Fitting
 ```{r}
-counts <- read_csv("c4_marc.csv")
+counts <- read_csv("c4_marc_2.csv")
 counts[, 1:O] <- counts[, 1:O] + 1 / 10
 divider <- rowSums(counts[, 1:O])
 counts[, 1:O] <- apply(counts[, 1:O], 2, \(x) x / divider)
     
 logliks <- fitting(statistics, counts)
-
-max(logliks$loglik)
 
 getinterval <- function(var) {
     profiled <- logliks %>% group_by(!!!syms(var)) %>% summarize(loglik = max(loglik))
@@ -191,3 +192,7 @@ data.frame(count = 0:(O - 1), freq = gatherNI[1:O]) %>%
     theme(text = element_text(size = 12, family = "mono"),
           legend.position = "bottom")
 ```
+
+Mine, 2 plug-ings: l = -263.37; AIC = 534.74
+Marc's, 42 plug-ins: l = -220.52; AIC = 529.04
+Marc's, 2 plug-ins: l = -269.83; AIC = 547.61
