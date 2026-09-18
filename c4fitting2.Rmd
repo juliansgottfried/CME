@@ -191,3 +191,6 @@ data.frame(count = 0:(O - 1), freq = gatherNI[1:O]) %>%
     theme(text = element_text(size = 12, family = "mono"),
           legend.position = "bottom")
 ```
+
+Mine: l = -263.37; AIC = 534.74
+Marc's: l = -220.52; AIC = 529.04

@@ -138,6 +138,12 @@ for (i in 1:length(cmes)) {
     NI[N * (i - 1) + (1:N), ] <- statistics %>% mutate(cme = cmes[i]) %>% select(cme, N, I)
 }
 
+# NI %>% group_by(cme) %>% summarize(mean = mean(N), var = var(N)) %>% 
+#     mutate(p = mean / var) %>% mutate(r = mean * p / (1 - p)) %>% 
+#     mutate(shape = r, scale = (1 - p) / p) %>% 
+#     mutate(l = qgamma(0.025, shape = shape, scale = scale),
+#            u = qgamma(0.975, shape = shape, scale = scale)) %>% 
+#     pull(u) %>% max %>% ceiling
 ```
 
 ## Estimate alpha

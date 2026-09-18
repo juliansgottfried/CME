@@ -8,10 +8,7 @@ addprocs(SlurmManager())
 
 @everywhere R0 = (0:0.001:(0.1 - 0.001))
 @everywhere π = 0:0.0005:(0.05 - 0.0005)
-@everywhere μ = [1:136; 138; 139; 141; 142; 
-                144; 147; 150; 151; 153; 
-                154; 156; 157; 160; 161; 
-                168]
+@everywhere μ = 1:150
 
 @everywhere J = 100
 @everywhere G = 50
