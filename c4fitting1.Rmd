@@ -28,8 +28,8 @@ fitting <- function(statistics, counts) {
         slimfreq <- counts %>% filter(N == j)
         loglik <- loglik + apply(slimfreq[, 1:O], 1, \(x) sum(slimI * log(x)))
     }
-    loglik <- loglik + factor + sum(dnbinom(unique(statistics$N), size, p, log = T))
-    cbind(loglik, slimfreq %>% select(R0:phi))
+    loglik <- loglik + factor + sum(dnbinom(statistics$N, size, p, log = T))
+    cbind(loglik, slimfreq %>% select(c(R0, pi)))
 }
 ```
 
@@ -38,9 +38,8 @@ fitting <- function(statistics, counts) {
 N <- 42
 O <- 50
 
-R0 <- seq(from = 0, by = 0.05, to = 5 - 0.05)
-pi <- seq(from = 0, by = 0.0025, to = 0.25 - 0.0025)
-phi <- seq(0, by = 0.1, to = 10 - 0.1)
+R0 <- seq(from = 0, by = 0.02, to = 2 - 0.02) / 100
+pi <- seq(from = 0, by = 0.0001, to = 0.01 - 0.0001)
 
 mu <- 97
 var <- 516
@@ -87,67 +86,72 @@ statistics <- statistics %>% select(-aid)
 ## Convert simulations to correct format
 ```{r}
 converter <- function(i) {
-    tmpcounts <- data.frame(t(read.csv(paste0("c4results/counts_", i,".csv"), header = F)))
+    tmpcounts <- data.frame(t(read.csv(paste0("results/counts_", i,".csv"), header = F)))
     tmpcounts$R0 <- R0[i]
-    tmpcounts$pi <- 0
-    tmpcounts$phi <- 0
-    for (j in 1:100) {
-        for (k in 1:100) {
-            tmpcounts$pi[100 * (j - 1) + k] <- pi[j]
-            tmpcounts$phi[100 * (j - 1) + k] <- phi[k]
-        }
-    }
-    shapely <- matrix(0, 10000 * 160, 54)
+    tmpcounts$pi <- pi
+    shapely <- matrix(0, 100 * 160, 53)
     for (j in 1:160) {
-        shapely[10000 * (j - 1) + (1:10000), 51] <- j
-        shapely[10000 * (j - 1) + (1:10000), c(1:50, 52:54)] <-
-            as.matrix(tmpcounts[, c(50 * (j - 1) + (1:50), 8001:8003)])
+        shapely[100 * (j - 1) + (1:100), 51] <- j
+        shapely[100 * (j - 1) + (1:100), c(1:50, 52:53)] <-
+            as.matrix(tmpcounts[, c(50 * (j - 1) + (1:50), 8001:8002)])
     }
-    shapely <- data.frame(shapely)
-    colnames(shapely)[51:54] <- c("N","R0","pi","phi")
-    write_csv(shapely, paste0("c4results_reshape/counts_", i,".csv"))
+    shapely
 }
-for (i in c(1:100)) {
+shapeliest <- matrix(0, 100 * 100 * 160, 53)
+for (i in 1:100) {
     print(i)
-    converter(i)
+    shapeliest[(1:(100 * 160)) + 100 * 160 * (i - 1), ] <- converter(i)
 }
+shapeliest <- as.data.frame(shapeliest)
+colnames(shapeliest)[51:53] <- c("N","R0","pi")
+write_csv(shapeliest, "c4.csv")
 ```
 
 ## Fitting
 ```{r}
-logliks <- matrix(0, 100 ^ 3, 4)
-readandfit <- function(i) {
-    counts <- suppressMessages(read_csv(paste0("c4results/counts_", i, ".csv")))
-    counts[, 1:O] <- counts[, 1:O] + 1 / 10
-    divider <- rowSums(counts[, 1:O])
-    counts[, 1:O] <- apply(counts[, 1:O], 2, \(x) x / divider)
-    fitting(statistics, counts)
-}
-for (i in 1:100) {
-    print(i)
-    logliks[(1:10000) + 10000 * (i - 1), ] <- as.matrix(readandfit(i))
-}
-logliks <- as.data.frame(logliks)
-colnames(logliks) <- c("loglik", "R0", "pi", "phi")
-write_csv(logliks, "logliks.csv")
+counts <- read_csv("c4_me.csv")
+counts[, 1:O] <- counts[, 1:O] + 1 / 10
+divider <- rowSums(counts[, 1:O])
+counts[, 1:O] <- apply(counts[, 1:O], 2, \(x) x / divider)
+    
+logliks <- fitting(statistics, counts)
+
+max(logliks$loglik)
 
 getinterval <- function(var) {
-    var <- "pi"
     profiled <- logliks %>% group_by(!!!syms(var)) %>% summarize(loglik = max(loglik))
-    plot(profiled[1:10, ])
-    interval <- 2 * (max(logliks$loglik) - profiled$loglik) <= qchisq(0.95, 1)
-    range(unlist(profiled[, var])[interval])
+    colnames(profiled) <- c("var", "loglik")
+    profiled$interval <- 2 * (max(logliks$loglik) - profiled$loglik) <= qchisq(0.95, 1)
+    bounds <- range(unlist(profiled$var)[profiled$interval])
+    profiled$interval <- with(profiled, ifelse(var >= bounds[1] & var <= bounds[2], T, F))
+
+    hat <- unlist(logliks[var])[which.max(logliks$loglik)]
+    med <- median(range(profiled$var[profiled$interval]))
+    
+    isR0 = var == "R0"
+    plot <- profiled %>%
+        ggplot(aes(x = var * mu ^ isR0, y = loglik, color = interval)) +
+        geom_point(shape = 1, stroke = 0.8) +
+        geom_vline(xintercept = med * mu ^ isR0, linetype = 2, color = "#6eecff") +
+        scale_color_manual(values = c("black", "#ff4da3")) +
+        guides(color = "none") +
+        xlab(var) + ylab("loglik") +
+        theme_classic() +
+        theme(text = element_text(size = 12, family = "mono"))
+    
+    list(plot, hat, med)
 }
-R0hat <- median(getinterval("R0"))
-pihat <- median(getinterval("pi"))
-phihat <- median(getinterval("phi"))
+
+getinterval("R0")[[1]]
+getinterval("pi")[[1]]
+
+R0hat <- round(getinterval("R0")[[3]], 4)
+pihat <- round(getinterval("pi")[[3]], 5)
 ```
 
 ## Examining c4
 ```{r}
-readcounts <- read_csv(paste0("c4results/counts_", which(R0 == R0hat), ".csv"))
-plotcounts <- readcounts %>% 
-    filter(round(pi, 4) == round(pihat, 4), round(phi, 1) == round(phihat, 1)) 
+plotcounts <- counts %>% filter(R0 == R0hat, pi == round(pihat, 4)) 
 
 gatherNI <- colSums(plotcounts[statistics$N, 1:O])
 gatherNI <- gatherNI / sum(gatherNI)

@@ -4,7 +4,7 @@ sbatch \
     --ntasks=100 \
     --cpus-per-task=1 \
     --mem-per-cpu=2G \
-    --time=00:30:00 \
+    --time=00:10:00 \
     --output=/scratch/users/jgottf/CME/output/%j.out \
     --error=/scratch/users/jgottf/CME/output/%j.out \
     --partition=normal,hns \

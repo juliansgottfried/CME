@@ -20,15 +20,17 @@ setwd("~/Desktop/CME")
 fitting <- function(statistics, counts) {
     factor <- 0
     loglik <- rep(0, 100 * 100)
-    for (j in unique(statistics$N)) {
+    for (j in Ns) {
         if (j == 0) next
         slimdata <- statistics %>% filter(N == j)
         slimI <- as.numeric(unname(table(factor(slimdata$I, levels = 0:(O-1)))))
         factor <- factor + log(factorial(sum(slimI))) - sum(log(factorial(slimI)))
-        slimfreq <- counts %>% filter(N == j)
+        slimfreq <- counts %>% filter(mu == j)
         loglik <- loglik + apply(slimfreq[, 1:O], 1, \(x) sum(slimI * log(x)))
     }
-    loglik <- loglik + factor + sum(dnbinom(unique(statistics$N), size, p, log = T))
+    loglik <- loglik + factor + sum(dgamma(statistics$N, 
+                                           shape = size, scale = (1 - p) / p, 
+                                           log = T))
     cbind(loglik, slimfreq %>% select(c(R0, pi)))
 }
 ```
@@ -81,6 +83,8 @@ statistics <- rbind(statistics,
                                N = 0, I = NA)[!(unique(hostdat$aid) %in% statistics$aid), ])
 statistics[is.na(statistics)] <- 0
 statistics <- statistics %>% select(-aid)
+
+Ns <- sort(unique(statistics$N))
 ```
 
 ## Convert simulations to correct format
@@ -88,33 +92,45 @@ statistics <- statistics %>% select(-aid)
 converter <- function(i) {
     tmpcounts <- data.frame(t(read.csv(paste0("results/counts_", i,".csv"), header = F)))
     tmpcounts$R0 <- R0[i]
-    tmpcounts$pi <- pi
-    shapely <- matrix(0, 100 * 160, 53)
-    for (j in 1:160) {
-        shapely[100 * (j - 1) + (1:100), 51] <- j
-        shapely[100 * (j - 1) + (1:100), c(1:50, 52:53)] <-
-            as.matrix(tmpcounts[, c(50 * (j - 1) + (1:50), 8001:8002)])
+    tmpcounts$pi <- 0
+    tmpcounts$mu <- 0
+    for (j in 1:length(pi)) {
+        for (k in 1:length(Ns)) {
+            tmpcounts$pi[length(Ns) * (j - 1) + k] <- pi[j]
+            tmpcounts$mu[length(Ns) * (j - 1) + k] <- Ns[k]
+        }
     }
-    shapely
+    shapely <- matrix(0, 3200 * 160, 54)
+    for (j in 1:160) {
+        shapely[3200 * (j - 1) + (1:3200), 51] <- j
+        shapely[3200 * (j - 1) + (1:3200), c(1:50, 52:54)] <-
+            as.matrix(tmpcounts[, c(50 * (j - 1) + (1:50), 8001:8003)])
+    }
+    colnames(shapely) <- c(paste0("X", 1:50), "N", "R0", "pi", "mu")
+    shapely[shapely[, "N"] == shapely[, "mu"], ]
 }
-shapeliest <- matrix(0, 100 * 100 * 160, 53)
+
+shapeliest <- matrix(0, 3200 * 100, 54)
 for (i in 1:100) {
     print(i)
-    shapeliest[(1:(100 * 160)) + 100 * 160 * (i - 1), ] <- converter(i)
+    shapeliest[(1:3200) + 3200 * (i - 1), ] <- converter(i)
 }
-shapeliest <- as.data.frame(shapeliest)
-colnames(shapeliest)[51:53] <- c("N","R0","pi")
-write_csv(shapeliest, "c4.csv")
+shapeliestdf <- data.frame(shapeliest)
+colnames(shapeliestdf)[51:54] <- c("N", "R0", "pi", "mu")
+
+write_csv(shapeliestdf %>% select(-N), "c4_marc.csv")
 ```
 
 ## Fitting
 ```{r}
-counts <- read_csv("c4.csv")
+counts <- read_csv("c4_marc.csv")
 counts[, 1:O] <- counts[, 1:O] + 1 / 10
 divider <- rowSums(counts[, 1:O])
 counts[, 1:O] <- apply(counts[, 1:O], 2, \(x) x / divider)
     
 logliks <- fitting(statistics, counts)
+
+max(logliks$loglik)
 
 getinterval <- function(var) {
     profiled <- logliks %>% group_by(!!!syms(var)) %>% summarize(loglik = max(loglik))
@@ -137,21 +153,21 @@ getinterval <- function(var) {
         theme_classic() +
         theme(text = element_text(size = 12, family = "mono"))
     
-    list(plot, hat, med)
+    list(plot, as.numeric(hat), med)
 }
 
 getinterval("R0")[[1]]
 getinterval("pi")[[1]]
 
-R0hat <- round(getinterval("R0")[[3]], 4)
-pihat <- round(getinterval("pi")[[3]], 5)
+R0hat <- round(getinterval("R0")[[2]], 4)
+pihat <- round(getinterval("pi")[[2]], 5)
 ```
 
 ## Examining c4
 ```{r}
-plotcounts <- counts %>% filter(R0 == R0hat, pi == round(pihat, 4)) 
+plotcounts <- counts %>% filter(round(R0, 4) == R0hat, round(pi, 4) == pihat)
 
-gatherNI <- colSums(plotcounts[statistics$N, 1:O])
+gatherNI <- colSums(plotcounts[sapply(statistics$N, \(x) which(Ns == x)), 1:O])
 gatherNI <- gatherNI / sum(gatherNI)
 
 cmedat %>%
@@ -177,3 +193,8 @@ data.frame(count = 0:(O - 1), freq = gatherNI[1:O]) %>%
     theme(text = element_text(size = 12, family = "mono"),
           legend.position = "bottom")
 ```
+
+Mine: -263.37
+Marc's: -276.98
+
+Next step: fit all CMEs, using both approaches
