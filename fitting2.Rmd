@@ -137,6 +137,7 @@ for (i in 1:length(cmes)) {
     statistics[is.na(statistics)] <- 0
     NI[N * (i - 1) + (1:N), ] <- statistics %>% mutate(cme = cmes[i]) %>% select(cme, N, I)
 }
+
 ```
 
 ## Estimate alpha

@@ -28,9 +28,7 @@ fitting <- function(statistics, counts) {
         slimfreq <- counts %>% filter(mu == j)
         loglik <- loglik + apply(slimfreq[, 1:O], 1, \(x) sum(slimI * log(x)))
     }
-    loglik <- loglik + factor + sum(dgamma(statistics$N, 
-                                           shape = size, scale = (1 - p) / p, 
-                                           log = T))
+    loglik <- loglik + factor + sum(dpois(statistics$N, statistics$N, log = T))
     cbind(loglik, slimfreq %>% select(c(R0, pi)))
 }
 ```
@@ -193,8 +191,3 @@ data.frame(count = 0:(O - 1), freq = gatherNI[1:O]) %>%
     theme(text = element_text(size = 12, family = "mono"),
           legend.position = "bottom")
 ```
-
-Mine: -263.37
-Marc's: -276.98
-
-Next step: fit all CMEs, using both approaches
