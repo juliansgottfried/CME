@@ -3,7 +3,7 @@
 using Distributed, SlurmClusterManager
 addprocs(SlurmManager())
 
-@everywhere include("/scratch/users/jgottf/CME/simuncond.jl")
+@everywhere include("/scratch/users/jgottf/CME/sim42.jl")
 @everywhere import StatsBase, DelimitedFiles
 
 @everywhere R0 = (0:0.001:(0.1 - 0.001))

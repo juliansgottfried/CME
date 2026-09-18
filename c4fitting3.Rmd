@@ -196,3 +196,5 @@ data.frame(count = 0:(O - 1), freq = gatherNI[1:O]) %>%
 Mine, 2 plug-ings: l = -263.37; AIC = 534.74
 Marc's, 42 plug-ins: l = -220.52; AIC = 529.04
 Marc's, 2 plug-ins: l = -269.83; AIC = 547.61
+
+think about correct distribution for N across subjects
