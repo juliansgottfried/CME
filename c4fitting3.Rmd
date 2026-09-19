@@ -164,9 +164,11 @@ pihat <- round(getinterval("pi")[[2]], 5)
 
 ## Examining c4
 ```{r}
-plotcounts <- counts %>% filter(round(R0, 4) == R0hat, round(pi, 4) == pihat)
+counts %>% filter(N == 100, R0 == 0.01, pi == 0.005) %>% select(X1:X50) %>% t %>% plot
 
-gatherNI <- colSums(plotcounts[sapply(statistics$N, \(x) which(Ns == x)), 1:O])
+plotcounts <- counts %>% filter(R0 == R0hat, pi == pihat)
+
+gatherNI <- colSums(plotcounts[statistics$N, 1:O])
 gatherNI <- gatherNI / sum(gatherNI)
 
 cmedat %>%
@@ -196,5 +198,3 @@ data.frame(count = 0:(O - 1), freq = gatherNI[1:O]) %>%
 Mine, 2 plug-ings: l = -263.37; AIC = 534.74
 Marc's, 42 plug-ins: l = -220.52; AIC = 529.04
 Marc's, 2 plug-ins: l = -269.83; AIC = 547.61
-
-think about correct distribution for N across subjects

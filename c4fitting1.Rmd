@@ -104,7 +104,7 @@ for (i in 1:100) {
 }
 shapeliest <- as.data.frame(shapeliest)
 colnames(shapeliest)[51:53] <- c("N","R0","pi")
-write_csv(shapeliest, "c4.csv")
+write_csv(shapeliest, "c4_me.csv")
 ```
 
 ## Fitting

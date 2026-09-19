@@ -165,7 +165,7 @@ var(NI$N[NI$cme == "c4"])
 
 ## Convert simulations to correct format
 ```{r}
-# converter <- function(i) {
+converter <- function(i) {
     tmpcounts <- data.frame(t(read.csv(paste0("results2/counts_", i,".csv"), header = F)))
     tmpcounts$alpha <- alphalist[i]
     tmpcounts$f <- 0

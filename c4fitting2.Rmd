@@ -116,12 +116,12 @@ for (i in 1:100) {
 shapeliestdf <- data.frame(shapeliest)
 colnames(shapeliestdf)[51:54] <- c("N", "R0", "pi", "mu")
 
-write_csv(shapeliestdf %>% select(-N), "c4_marc.csv")
+write_csv(shapeliestdf %>% select(-N), "c4_marc_42.csv")
 ```
 
 ## Fitting
 ```{r}
-counts <- read_csv("c4_marc.csv")
+counts <- read_csv("c4_marc_42.csv")
 counts[, 1:O] <- counts[, 1:O] + 1 / 10
 divider <- rowSums(counts[, 1:O])
 counts[, 1:O] <- apply(counts[, 1:O], 2, \(x) x / divider)
