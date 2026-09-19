@@ -15,7 +15,7 @@ addprocs(SlurmManager())
 @everywhere inter = 1
 @everywhere nbin = 50
 
-@everywhere nN = 160
+@everywhere nN = 168
 
 pmap(eachindex(R0)) do i
     counts = zeros(Int, nbin * nN, length(π) * length(μ))

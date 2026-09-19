@@ -1,0 +1,300 @@
+---
+title: "fitting2"
+author: "Julian Gottfried"
+date: "2026-08-21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Setup
+```{r}
+library(tidyverse)
+setwd("~/Desktop/CME")
+```
+
+## Functions
+```{r}
+fitting <- function(statistics, counts, size, p) {
+    factor <- 0
+    loglik <- rep(0, 100 * 100)
+    for (j in unique(statistics$N)) {
+        if (j == 0) next
+        slimdata <- statistics %>% filter(N == j)
+        slimI <- as.numeric(unname(table(factor(slimdata$I, levels = 0:(O-1)))))
+        factor <- factor + log(factorial(sum(slimI))) - sum(log(factorial(slimI)))
+        slimfreq <- counts %>% filter(N == j)
+        loglik <- loglik + apply(slimfreq[, 1:O], 1, \(x) sum(slimI * log(x)))
+    }
+    loglik <- loglik + factor + sum(dnbinom(statistics$N, size, p, log = T))
+    cbind(loglik, slimfreq %>% select(c(R0, pi)))
+}
+
+getinterval <- function(logliks, var, makeplot) {
+    profiled <- logliks %>% group_by(!!!syms(var)) %>% summarize(loglik = max(loglik))
+    colnames(profiled) <- c("var", "loglik")
+    profiled$interval <- 2 * (max(logliks$loglik) - profiled$loglik) <= qchisq(0.95, 1)
+    bounds <- range(unlist(profiled$var)[profiled$interval])
+    profiled$interval <- with(profiled, ifelse(var >= bounds[1] & var <= bounds[2], T, F))
+
+    hat <- unlist(logliks[var])[which.max(logliks$loglik)]
+    interval <- range(profiled$var[profiled$interval])
+    med <- median(interval)
+    
+    isR0 = var == "R0"
+    plot <- NULL
+    if (makeplot) plot <- profiled %>%
+        ggplot(aes(x = var * mu ^ isR0, y = loglik, color = interval)) +
+        geom_point(shape = 1, stroke = 0.8) +
+        geom_vline(xintercept = med * mu ^ isR0, linetype = 2, color = "#6eecff") +
+        scale_color_manual(values = c("black", "#ff4da3")) +
+        guides(color = "none") +
+        xlab(var) + ylab("loglik") +
+        theme_classic() +
+        theme(text = element_text(size = 12, family = "mono"))
+    
+    list(plot, as.numeric(hat), med, interval)
+}
+```
+
+## Hyperparams
+```{r}
+N <- 42
+O <- 50
+
+R0 <- seq(from = 0, by = 0.002, to = 0.2 - 0.002)
+pi <- seq(from = 0, by = 0.0005, to = 0.05 - 0.0005)
+mu <- 1:150
+```
+
+## CME data
+```{r}
+cmemat <- read.table("eitan_data/host_cme_matrix.txt", header = T, sep = "\t")
+cmes <- colnames(cmemat %>% select(-host_id))
+cmemat$aid <- str_split(cmemat$host_id, "_", simplify = T)[, 1]
+cmemat$genome <- str_split(cmemat$host_id, "_", simplify = T)[, 2]
+hostdat <-  read.table("eitan_data/hosts.txt", header = T, sep = "\t")
+cmemat <- left_join(cmemat, hostdat %>% select(species, genus, family, host_id), by = "host_id")
+cmetab <- read.table("eitan_data/cme_table.txt", header = T, sep = "\t")
+cmedat <- cmemat %>% 
+    group_by(aid, species) %>% 
+    summarize_at(cmes, \(x) sum(x) != 0) %>% 
+    select(-species) %>% 
+    pivot_longer(cols = -aid, names_to = "cme") %>% 
+    group_by(cme, aid) %>% 
+    summarize(count = sum(value), .groups = "drop")
+```
+
+## N and I data
+```{r}
+NI <- data.frame(matrix(0, N * length(cmes), 3))
+colnames(NI) <- c("cme","N","I")
+for (i in 1:length(cmes)) {
+    print(i)
+    fams <- cmemat %>% filter(.[[cmes[i]]]) %>% pull(family) %>% unique
+    Nstats <- suppressMessages(cmemat %>% 
+        filter(family %in% fams) %>% 
+        group_by(aid) %>% 
+        select(aid, species) %>%
+        distinct %>% 
+        summarize(N = n()))
+    Istats <- suppressMessages(cmemat %>% filter(.[[cmes[i]]]) %>% group_by(aid, species) %>% 
+        summarize(n = n()) %>% summarize(I = n()))
+    statistics <- left_join(Nstats, Istats, by = "aid")
+    statistics <- rbind(statistics,
+                        data.frame(aid = unique(hostdat$aid), N = 0, I = NA)[!(unique(hostdat$aid) %in% statistics$aid), ])
+    statistics[is.na(statistics)] <- 0
+    NI[N * (i - 1) + (1:N), ] <- statistics %>% mutate(cme = cmes[i]) %>% select(cme, N, I)
+}
+```
+
+## Convert simulations to correct format
+```{r}
+converter <- function(i, mixture, const) {
+    i <- 1
+    
+    mixtures
+    
+    tmpcounts <- t(data.table::fread(paste0("results/counts_", i,".csv")))
+    
+    mixed <- matrix(0, length(pi), 8002)
+    for (j in 1:length(pi)) {
+        mixed[j, 1:8000] <- apply(tmpcounts[(1:150) + 150 * (j - 1), 1:8000], 2, 
+              \(x) sum(x * mixture / const))
+    }
+    
+    mixed <- matrix(0, length(pi) * nrow(mixtures), 8002)
+    for (j in 1:length(pi)) {
+        print(j)
+        for (k in 1:nrow(mixtures)) {
+            tmpmix <- as.numeric(mixtures[k, ])
+            mixed[length(pi) * (j - 1) + k, 1:8000] <- 
+                apply(tmpcounts[(1:150) + 150 * (j - 1), 1:8000], 2, 
+                  \(x) sum(x * tmpmix / sum(tmpmix)))
+        }
+    }
+    
+    as.numeric(mixtures[1,])
+    
+    
+    mixed[, 8001] <- R0[i]
+    mixed[, 8002] <- pi
+    shapely <- matrix(0, 100 * 160, 53)
+    for (j in 1:160) {
+        shapely[100 * (j - 1) + (1:100), 51] <- j
+        shapely[100 * (j - 1) + (1:100), c(1:50, 52:53)] <-
+            as.matrix(mixed[, c(50 * (j - 1) + (1:50), 8001:8002)])
+    }
+    colnames(shapely) <- c(paste0("X", 1:50), "N", "R0", "pi")
+    shapely
+}
+```
+
+
+i need to summarize the data by the N for each CME
+
+## CME fitting
+```{r}
+mixtures <- matrix(0, nrow = length(cmes), ncol = 150)
+for (i in 1:length(cmes)) {
+    tmpN <- NI %>% filter(cme == cmes[i]) %>% pull(N)
+    tmpmu <- mean(tmpN)
+    tmpvar <- var(tmpN)
+    
+    p = tmpmu / tmpvar
+    scale = (1 - p) / p
+    shape = p * tmpmu / (1 - p)
+
+    mixtures[i, ] <- sapply(mu, \(x) pgamma(x, shape = shape, scale = scale) - 
+               pgamma(x - 1, shape = shape, scale = scale))
+}
+mixtures <- data.frame(mixtures) %>% mutate(cme = cmes) %>% 
+    group_by(across(X1:X150)) %>% summarize(cmes = list(cme))
+similarcmes <- mixtures$cmes
+mixtures <- mixtures %>% select(-cmes)
+
+NI %>% pull(N) %>% unique %>% max
+
+fits <- data.frame(cme = cmes, 
+                   pihat = 0, pim = 0, pil = 0, piu = 0, pim = 0,
+                   R0hat = 0, R0m = 0, R0l = 0, R0u = 0,
+                   loglik = -Inf)
+
+for (i in 1:length(cmes)) {
+    print(i)
+    i <- 1
+    tmpN <- NI %>% filter(cme == cmes[i]) %>% pull(N)
+    tmpmu <- mean(tmpN)
+    tmpvar <- var(tmpN)
+    
+    p = tmpmu / tmpvar
+    scale = (1 - p) / p
+    shape = p * tmpmu / (1 - p)
+
+    mixture <- sapply(mu, \(x) pgamma(x, shape = shape, scale = scale) - 
+               pgamma(x - 1, shape = shape, scale = scale))
+    const <- sum(mixture)
+    
+    shapeliest <- matrix(0, 160000 * 100, 53)
+    for (i in 1:100) {
+        print(i)
+        shapeliest[(1:160000) + 160000 * (i - 1), ] <- converter(i, mixture, const)
+    }
+    counts <- data.frame(shapeliest)
+    colnames(counts)[51:53] <- c("R0", "pi", "mu")
+    
+    counts[, 1:O] <- counts[, 1:O] + 1 / 10
+    divider <- rowSums(counts[, 1:O])
+    counts[, 1:O] <- apply(counts[, 1:O], 2, \(x) x / divider)
+    
+    
+    
+    logliks <- fitting(NI %>% filter(cme == cmes[i]) %>% select(N, I), counts)
+    fits[i, 2:5] <- unlist(getinterval(logliks, "pi", F))
+    fits[i, 6:9] <- unlist(getinterval(logliks, "R0", F))
+    fits[i, 10] <- max(logliks$loglik)
+}
+
+write_csv(fits, "fits_42.csv")
+```
+
+## Viz
+```{r}
+fits <- read_csv("fits_42.csv")
+fits <- left_join(fits, NI %>% group_by(cme) %>% summarize(N = mean(N)), by = "cme")
+
+fits %>% filter(!(R0l == min(R0) & R0u == max(R0))) %>% 
+    arrange(-R0m * N) %>% 
+    mutate(cme = row_number()) %>% 
+    ggplot(aes(x = cme, y = R0m * N)) +
+    geom_linerange(aes(ymin = R0l * N, ymax = R0u * N), alpha = 0.15) +
+    geom_point(alpha = 0.8, shape = 3) +
+    geom_hline(yintercept = 1, color = "red", linetype = 2) +
+    theme_classic() +
+    ylab("R0") +
+    theme(text = element_text(size = 12, family = "mono"))
+
+fits %>% filter(!(R0l == min(R0) & R0u == max(R0))) %>% 
+    arrange(-pim) %>% 
+    mutate(cme = row_number()) %>% 
+    ggplot(aes(x = cme, y = pim)) +
+    geom_linerange(aes(ymin = pil, ymax = piu), alpha = 0.15) +
+    geom_point(alpha = 0.8, shape = 3) +
+    theme_classic() +
+    ylab("pi") +
+    theme(text = element_text(size = 12, family = "mono"))
+
+fits %>% ggplot(aes(x = R0m, y = pim)) +
+    geom_point(shape = 1) +
+    theme_classic() +
+    xlab("R0") + ylab("pi") +
+    theme(text = element_text(size = 12, family = "mono"))
+
+fits %>% filter(!(R0l == min(R0) & R0u == max(R0))) %>% 
+    ggplot(aes(x = R0m, y = loglik)) +
+    geom_point(shape = 1) +
+    theme_classic() +
+    xlab("R0") + 
+    theme(text = element_text(size = 12, family = "mono"))
+
+fits %>% filter(!(R0l == min(R0) & R0u == max(R0))) %>% 
+    mutate(R0l = R0l * N, R0u = R0u * N, R0m = R0m * N) %>% filter(R0m >= 1)
+```
+
+## Examining specific CMEs
+```{r}
+tester <- "c4"
+testpar <- fits %>% filter(cme == tester) %>% select(R0 = R0m, pi = pim)
+
+plotcounts <- counts %>% filter(R0 == R0[which.min(abs(testpar$R0 - R0))], 
+                                pi == pi[which.min(abs(testpar$pi - pi))])
+
+gatherNI <- colSums(plotcounts[sapply(NI %>% filter(cme == tester) %>% pull(N), 
+                                      \(x) which(mu == x)), 1:O])
+gatherNI <- gatherNI / sum(gatherNI)
+
+cmedat %>%
+    filter(cme == tester) %>% pull(count) %>% 
+    factor(levels = 0:(O-1)) %>% table %>% data.frame %>% 
+    rename(count = '.', freq = Freq) %>% 
+    mutate(count = as.numeric(count) - 1, 
+           freq = freq / sum(freq)) %>% 
+    ggplot(aes(x = count, y = freq)) +
+    geom_col(width = 1, color = "black", fill = "white")+
+    ylim(0, 1) + xlim(-1, 20) +
+    theme_classic() +
+    ggtitle(tester) +
+    theme(text = element_text(size = 12, family = "mono"),
+          legend.position = "bottom")
+
+data.frame(count = 0:(O - 1), freq = gatherNI[1:O]) %>% 
+    ggplot(aes(x = count, y = freq)) +
+    geom_col(width = 1, color = "black", fill = "white")+
+    ylim(0, 1) + xlim(-1, 20) +
+    theme_classic() +
+    ggtitle("best fit") +
+    theme(text = element_text(size = 12, family = "mono"),
+          legend.position = "bottom")
+```
