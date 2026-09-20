@@ -15,6 +15,7 @@ addprocs(SlurmManager())
 @everywhere nN = 168
 
 pmap(1:size(mixtures)[1]) do i
-    shapeliest = Helper.makeshapely(mixtures[i, ], R0, π, μ, nbin, nN)
+    shapeliest = zeros(Float64, nN * length(π) * length(R0), nbin + 3)
+    Helper.makeshapely!(mixtures[i, :], R0, π, μ, nbin, nN, shapeliest)
     DelimitedFiles.writedlm("/scratch/users/jgottf/CME/cme_results/counts_$(i).csv", shapeliest, ',')
 end

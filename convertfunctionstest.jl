@@ -25,7 +25,7 @@ function makeshapely!(mixture, R0, π, μ, nbin, nN, shapeliest)
     tmpcounts = zeros(Float64, length(π) * length(μ), nbin * nN)
     mixed = zeros(Float64, length(π), nbin * nN + 2)
     shapely = zeros(Float64, length(π) * nN, nbin + 3)
-    for i in eachindex(R0)
+    for i in 1:10
         @views converter!(i, mixture, R0, π, μ, nbin, nN, tmpcounts, mixed, shapely, shapeliest[(1:(nN * length(π))) .+ nN * length(π) * (i - 1), :])
         tmpcounts .= 0
         mixed .= 0
