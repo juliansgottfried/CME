@@ -140,16 +140,6 @@ fits <- data.frame(cme = cmes,
                    loglik = -Inf)
 
 for (i in 1:length(cmes)) {
-    print(i)
-    
-    shapeliest <- matrix(0, 160000 * 100, 53)
-    for (i in 1:100) {
-        print(i)
-        shapeliest[(1:160000) + 160000 * (i - 1), ] <- converter(i, mixture, const)
-    }
-    counts <- data.frame(shapeliest)
-    colnames(counts)[51:53] <- c("R0", "pi", "mu")
-    
     counts[, 1:O] <- counts[, 1:O] + 1 / 10
     divider <- rowSums(counts[, 1:O])
     counts[, 1:O] <- apply(counts[, 1:O], 2, \(x) x / divider)
@@ -162,7 +152,7 @@ for (i in 1:length(cmes)) {
     fits[i, 10] <- max(logliks$loglik)
 }
 
-write_csv(fits, "fits_42.csv")
+write_csv(fits, "fits_marc_2.csv")
 ```
 
 ## Viz
