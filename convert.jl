@@ -14,8 +14,11 @@ addprocs(SlurmManager())
 @everywhere nbin = 50
 @everywhere nN = 168
 
+@everywhere l = 10
+@everywhere chunk = 1
+
 pmap(1:size(mixtures)[1]) do i
-    shapeliest = zeros(Float64, nN * length(π) * length(R0), nbin + 3)
-    Helper.makeshapely!(mixtures[i, :], R0, π, μ, nbin, nN, shapeliest)
-    DelimitedFiles.writedlm("/scratch/users/jgottf/CME/cme_results/counts_$(i).csv", shapeliest, ',')
+    shapeliest = zeros(Float64, nN * length(π) * l, nbin + 3)
+    Helper.makeshapely!(mixtures[i, :], R0, π, μ, nbin, nN, shapeliest, l, chunk)
+    DelimitedFiles.writedlm("/scratch/users/jgottf/CME/cme_results/counts_$(i)_$(chunk).csv", shapeliest, ',')
 end

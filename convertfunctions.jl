@@ -2,14 +2,14 @@ module Helper
 
 import DelimitedFiles
 
-function converter!(i, mixture, R0, π, μ, nbin, nN, tmpcounts, mixed, shapely, input)
-    tmpcounts .= DelimitedFiles.readdlm("results/counts_$(i).csv", ',')'
+function converter!(idx, mixture, R0, π, μ, nbin, nN, tmpcounts, mixed, shapely, input)
+    tmpcounts .= DelimitedFiles.readdlm("results/counts_$(idx).csv", ',')'
 
     for j in eachindex(π)
         @views tmptmp = tmpcounts[(1:length(μ)) .+ length(μ) .* (j - 1), 1:(nbin * nN)]
         mixed[j, 1:(nbin * nN)] .= tmptmp' * (mixture ./ sum(mixture))
     end
-    mixed[:, nbin * nN + 1] .= R0[i]
+    mixed[:, nbin * nN + 1] .= R0[idx]
     mixed[:, nbin * nN + 2] .= π
 
     for j in 1:nN
@@ -21,12 +21,13 @@ function converter!(i, mixture, R0, π, μ, nbin, nN, tmpcounts, mixed, shapely,
     input .= shapely
 end
 
-function makeshapely!(mixture, R0, π, μ, nbin, nN, shapeliest)
+function makeshapely!(mixture, R0, π, μ, nbin, nN, shapeliest, l, chunk)
     tmpcounts = zeros(Float64, length(π) * length(μ), nbin * nN)
     mixed = zeros(Float64, length(π), nbin * nN + 2)
     shapely = zeros(Float64, length(π) * nN, nbin + 3)
-    for i in eachindex(R0)
-        @views converter!(i, mixture, R0, π, μ, nbin, nN, tmpcounts, mixed, shapely, shapeliest[(1:(nN * length(π))) .+ nN * length(π) * (i - 1), :])
+    for i in 1:l
+        idx = i + l * (chunk - 1)
+        @views converter!(idx, mixture, R0, π, μ, nbin, nN, tmpcounts, mixed, shapely, shapeliest[(1:(nN * length(π))) .+ nN * length(π) * (i - 1), :])
         tmpcounts .= 0
         mixed .= 0
         shapely .= 0
