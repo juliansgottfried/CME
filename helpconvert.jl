@@ -3,7 +3,7 @@ module Helper
 import DelimitedFiles
 
 function converter!(idx, mixture, R0, π, μ, nbin, nN, tmpcounts, mixed, shapely, input)
-    tmpcounts .= DelimitedFiles.readdlm("results/counts_$(idx).csv", ',')'
+    tmpcounts .= DelimitedFiles.readdlm("results_marc_2/counts_$(idx).csv", ',')'
 
     for j in eachindex(π)
         @views tmptmp = tmpcounts[(1:length(μ)) .+ length(μ) .* (j - 1), 1:(nbin * nN)]
