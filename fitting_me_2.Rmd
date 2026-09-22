@@ -21,7 +21,6 @@ fitting <- function(statistics, counts, size, p) {
     factor <- 0
     loglik <- rep(0, 100 * 100)
     for (j in unique(statistics$N)) {
-        j <- 61
         if (j == 0) next
         slimdata <- statistics %>% filter(N == j)
         slimI <- as.numeric(unname(table(factor(slimdata$I, levels = 0:(O-1)))))
@@ -30,7 +29,7 @@ fitting <- function(statistics, counts, size, p) {
         loglik <- loglik + apply(slimfreq[, 1:O], 1, \(x) sum(slimI * log(x)))
     }
     loglik <- loglik + factor + sum(dnbinom(statistics$N, size, p, log = T))
-    cbind(loglik, slimfreq %>% select(c(R0, pi)))
+    cbind(loglik, slimfreq[, 52:53])
 }
 
 getinterval <- function(logliks, var, makeplot) {
@@ -150,33 +149,33 @@ fits <- data.frame(cme = cmes,
                    R0hat = 0, R0m = 0, R0l = 0, R0u = 0,
                    loglik = -Inf)
 
-for (i in 1:nrow(plugins)) {
-    i <- 1
-    counts <- data.table::fread(paste0("results_me_2/counts_", i, ".csv"))
+load <- function(i) {
+    counts <- as.matrix(data.table::fread(paste0("results_me_2/counts_", i, ".csv")))
     counts[, 1:O] <- counts[, 1:O] + 1 / 10
     divider <- rowSums(counts[, 1:O])
     counts[, 1:O] <- apply(counts[, 1:O], 2, \(x) x / divider)
+    counts
+}
+
+for (i in 1:nrow(plugins)) {
+    print(i)
+    counts <- load(i)
+    
+    mu <- plugins[i, ]$mu
+    var <- plugins[i, ]$var
+    p = mu / var
+    size = p * mu / (1 - p)
     
     for (cme in pluginlist[[i]]) {
-        cme = "c182"
         statistics <- NI %>% filter(cme == cmes[i]) %>% select(N, I)
-        logliks <- fitting(statistics, counts)
+        logliks <- data.frame(fitting(statistics, counts, size, p))
+        whichcme = which(cmes == cme)
+        fits[whichcme, 2:5] <- unlist(getinterval(logliks, "pi", F))
+        fits[whichcme, 6:9] <- unlist(getinterval(logliks, "R0", F))
+        fits[whichcme, 10] <- max(logliks$loglik)
+        
     }
 }
-
-for (i in 1:length(cmes)) {
-    counts[, 1:O] <- counts[, 1:O] + 1 / 10
-    divider <- rowSums(counts[, 1:O])
-    counts[, 1:O] <- apply(counts[, 1:O], 2, \(x) x / divider)
-    
-    
-    
-    logliks <- fitting(NI %>% filter(cme == cmes[i]) %>% select(N, I), counts)
-    fits[i, 2:5] <- unlist(getinterval(logliks, "pi", F))
-    fits[i, 6:9] <- unlist(getinterval(logliks, "R0", F))
-    fits[i, 10] <- max(logliks$loglik)
-}
-
 write_csv(fits, "fits_me_2.csv")
 ```
 
