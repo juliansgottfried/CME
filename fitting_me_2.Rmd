@@ -121,9 +121,8 @@ plugins <- plugins %>% distinct(mu, var)
 ## Convert simulations to correct format
 ```{r}
 converter <- function(i) {
-    i <- 14
+    i <- 1
     tmpcounts <- t(data.table::fread(paste0("results/counts_", i, ".csv")))
-    
     R0s <- rep(0, 100 ^ 2)
     pis <- rep(0, 100 ^ 2)
     for (j in 1:100) {
@@ -131,18 +130,17 @@ converter <- function(i) {
         R0s[idcs] <- R0[j]
         pis[idcs] <- pi[1:100]
     }
-    
-    shapely <- matrix(0, 10000 * 168, 53)
+    shapely <- matrix(0, 10000 * 168, 50)
     for (j in 1:168) {
-        shapely[10000 * (j - 1) + (1:10000), 51] <- j
-        shapely[10000 * (j - 1) + (1:10000), 1:50] <- tmpcounts[, 50 * (j - 1) + (1:50)]
+        shapely[10000 * (j - 1) + (1:10000), ] <- tmpcounts[, 50 * (j - 1) + (1:50)]
     }
-    write_csv(cbind(shapely, R0s, pis), paste0("results_me_2/counts", i, ".csv"))
+    fwrite(cbind(shapely, N = rep(1:168, each = 10000), 
+                    R0 = R0s, pi = pis), paste0("results_me_2/counts_", i, ".csv"))
 }
-
-shapeliest <- as.data.frame(shapeliest)
-colnames(shapeliest)[51:53] <- c("N","R0","pi")
-write_csv(shapeliest, "c4_me.csv")
+for (i in 1:114) {
+    print(i)
+    converter(i)
+}
 ```
 
 ## CME fitting
