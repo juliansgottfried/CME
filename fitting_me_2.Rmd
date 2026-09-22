@@ -21,11 +21,12 @@ fitting <- function(statistics, counts, size, p) {
     factor <- 0
     loglik <- rep(0, 100 * 100)
     for (j in unique(statistics$N)) {
+        j <- 61
         if (j == 0) next
         slimdata <- statistics %>% filter(N == j)
         slimI <- as.numeric(unname(table(factor(slimdata$I, levels = 0:(O-1)))))
         factor <- factor + log(factorial(sum(slimI))) - sum(log(factorial(slimI)))
-        slimfreq <- counts %>% filter(N == j)
+        slimfreq <- counts[counts[, 51] == j, ]
         loglik <- loglik + apply(slimfreq[, 1:O], 1, \(x) sum(slimI * log(x)))
     }
     loglik <- loglik + factor + sum(dnbinom(statistics$N, size, p, log = T))
@@ -121,7 +122,6 @@ plugins <- plugins %>% distinct(mu, var)
 ## Convert simulations to correct format
 ```{r}
 converter <- function(i) {
-    i <- 1
     tmpcounts <- t(data.table::fread(paste0("results/counts_", i, ".csv")))
     R0s <- rep(0, 100 ^ 2)
     pis <- rep(0, 100 ^ 2)
@@ -134,10 +134,10 @@ converter <- function(i) {
     for (j in 1:168) {
         shapely[10000 * (j - 1) + (1:10000), ] <- tmpcounts[, 50 * (j - 1) + (1:50)]
     }
-    fwrite(cbind(shapely, N = rep(1:168, each = 10000), 
-                    R0 = R0s, pi = pis), paste0("results_me_2/counts_", i, ".csv"))
+    write_csv(data.frame(cbind(shapely, N = rep(1:168, each = 10000), 
+                    R0 = R0s, pi = pis)), paste0("results_me_2/counts_", i, ".csv"))
 }
-for (i in 1:114) {
+for (i in 1:nrow(plugins)) {
     print(i)
     converter(i)
 }
@@ -146,17 +146,21 @@ for (i in 1:114) {
 ## CME fitting
 ```{r}
 fits <- data.frame(cme = cmes, 
-                   pihat = 0, pim = 0, pil = 0, piu = 0, pim = 0,
+                   pihat = 0, pim = 0, pil = 0, piu = 0,
                    R0hat = 0, R0m = 0, R0l = 0, R0u = 0,
                    loglik = -Inf)
 
 for (i in 1:nrow(plugins)) {
+    i <- 1
+    counts <- data.table::fread(paste0("results_me_2/counts_", i, ".csv"))
     counts[, 1:O] <- counts[, 1:O] + 1 / 10
     divider <- rowSums(counts[, 1:O])
     counts[, 1:O] <- apply(counts[, 1:O], 2, \(x) x / divider)
     
     for (cme in pluginlist[[i]]) {
-         fitting(NI %>% filter(cme == cmes[i]) %>% select(N, I), counts)
+        cme = "c182"
+        statistics <- NI %>% filter(cme == cmes[i]) %>% select(N, I)
+        logliks <- fitting(statistics, counts)
     }
 }
 
