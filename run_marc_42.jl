@@ -3,10 +3,10 @@
 using Distributed, SlurmClusterManager
 addprocs(SlurmManager())
 
-@everywhere include("/scratch/users/jgottf/CME/sim42.jl")
+@everywhere include("/scratch/users/jgottf/CME/sim_marc_42.jl")
 @everywhere import StatsBase, DelimitedFiles
 
-@everywhere R0 = (0:0.001:(0.1 - 0.001))
+@everywhere R0 = (0:0.002:(0.2 - 0.002))
 @everywhere π = 0:0.0005:(0.05 - 0.0005)
 @everywhere μ = [1:136; 138; 139; 141; 142; 
                 144; 147; 150; 151; 153; 

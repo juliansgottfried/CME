@@ -174,8 +174,6 @@ for (i in 1:nrow(plugins)) {
 write_csv(fits, "fits_marc_2.csv")
 ```
 
-check 54
-
 ## Viz
 ```{r}
 fits <- read_csv("fits_marc_2.csv")
@@ -214,9 +212,6 @@ fits %>% filter(!(R0l == min(R0) & R0u == max(R0))) %>%
     theme_classic() +
     xlab("R0") + 
     theme(text = element_text(size = 12, family = "mono"))
-
-fits %>% filter(!(R0l == min(R0) & R0u == max(R0))) %>% 
-    mutate(R0l = R0l * N, R0u = R0u * N, R0m = R0m * N) %>% filter(R0m >= 1)
 ```
 
 ## Examining specific CMEs
@@ -226,7 +221,7 @@ testpar <- fits %>% filter(cme == tester) %>% select(R0 = R0m, pi = pim)
 
 plotcounts <- load(which.max(unlist(lapply(mixturelist, \(x) sum(x == tester)))))
 plotcounts <- plotcounts[plotcounts[, "R0"] == R0[which.min(abs(testpar$R0 - R0))] &
-    plotcounts[, "pi"] == pi[which.min(abs(testpar$pi - pi))], ]
+    round(plotcounts[, "pi"], 4) == round(pi[which.min(abs(testpar$pi - pi))], 4), ]
 
 gatherNI <- colSums(plotcounts[NI %>% filter(cme == tester) %>% pull(N), 1:O])
 gatherNI <- gatherNI / sum(gatherNI)

@@ -106,6 +106,7 @@ for (i in 1:length(cmes)) {
     statistics[is.na(statistics)] <- 0
     NI[N * (i - 1) + (1:N), ] <- statistics %>% mutate(cme = cmes[i]) %>% select(cme, N, I)
 }
+
 mu <- sort(unique(NI$N))
 mu <- mu[2:length(mu)]
 ```
@@ -113,7 +114,7 @@ mu <- mu[2:length(mu)]
 ## Convert simulations to correct format
 ```{r}
 converter <- function(i) {
-    tmpcounts <- t(read.csv(paste0("results/counts_", i,".csv"), header = F))
+    tmpcounts <- t(fread(paste0("results/counts_", i,".csv"), header = F))
     tmpcounts <- cbind(tmpcounts, R0[i], 0, 0)
     for (j in 1:length(pi)) {
         for (k in 1:length(mu)) {
