@@ -169,10 +169,10 @@ for (i in 1:nrow(plugins)) {
     var <- plugins[i, ]$var
     p = mu / var
     size = p * mu / (1 - p)
-    for (cme in pluginlist[[i]]) {
-        statistics <- NI %>% filter(cme == cmes[i]) %>% select(N, I)
+    for (c in pluginlist[[i]]) {
+        statistics <- NI %>% filter(cme == c) %>% select(N, I)
         logliks <- data.frame(fitting(statistics, counts, size, p))
-        whichcme = which(cmes == cme)
+        whichcme = which(cmes == c)
         print(paste(i, whichcme))
         fits[whichcme, 2:5] <- unlist(getinterval(logliks, "pi", F))
         fits[whichcme, 6:9] <- unlist(getinterval(logliks, "R0", F))
@@ -231,11 +231,11 @@ fits %>% filter(!(R0l == min(R0) & R0u == max(R0))) %>%
 tester <- "c4"
 testpar <- fits %>% filter(cme == tester) %>% select(R0 = R0m, pi = pim)
 
-plotcounts <- counts %>% filter(R0 == R0[which.min(abs(testpar$R0 - R0))], 
-                                pi == pi[which.min(abs(testpar$pi - pi))])
+plotcounts <- load(which.max(unlist(lapply(pluginlist, \(x) sum(x == tester)))))
+plotcounts <- plotcounts[plotcounts[, "R0"] == R0[which.min(abs(testpar$R0 - R0))] &
+    plotcounts[, "pi"] == pi[which.min(abs(testpar$pi - pi))], ]
 
-gatherNI <- colSums(plotcounts[sapply(NI %>% filter(cme == tester) %>% pull(N), 
-                                      \(x) which(mu == x)), 1:O])
+gatherNI <- colSums(plotcounts[NI %>% filter(cme == tester) %>% pull(N), 1:O])
 gatherNI <- gatherNI / sum(gatherNI)
 
 cmedat %>%

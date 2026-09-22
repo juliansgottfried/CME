@@ -25,11 +25,11 @@ fitting <- function(statistics, counts, size, p) {
         slimdata <- statistics %>% filter(N == j)
         slimI <- as.numeric(unname(table(factor(slimdata$I, levels = 0:(O-1)))))
         factor <- factor + log(factorial(sum(slimI))) - sum(log(factorial(slimI)))
-        slimfreq <- counts %>% filter(N == j)
+        slimfreq <- counts[counts[, 51] == j, ]
         loglik <- loglik + apply(slimfreq[, 1:O], 1, \(x) sum(slimI * log(x)))
     }
     loglik <- loglik + factor + sum(dnbinom(statistics$N, size, p, log = T))
-    cbind(loglik, slimfreq %>% select(c(R0, pi)))
+    cbind(loglik, slimfreq[, 52:53])
 }
 
 getinterval <- function(logliks, var, makeplot) {
@@ -113,6 +113,7 @@ for (i in 1:length(cmes)) {
 ## Mixtures for conversion in cluster
 ```{r}
 mixtures <- matrix(0, nrow = length(cmes), ncol = 150)
+plugins <- matrix(0, nrow = length(cmes), ncol = 2)
 for (i in 1:length(cmes)) {
     tmpN <- NI %>% filter(cme == cmes[i]) %>% pull(N)
     tmpmu <- mean(tmpN)
@@ -121,46 +122,66 @@ for (i in 1:length(cmes)) {
     p = tmpmu / tmpvar
     scale = (1 - p) / p
     shape = p * tmpmu / (1 - p)
+    
+    plugins[i, ] <- c(p, shape)
 
     mixtures[i, ] <- sapply(mu, \(x) pgamma(x, shape = shape, scale = scale) - 
                pgamma(x - 1, shape = shape, scale = scale))
 }
-mixtures <- data.frame(mixtures) %>% mutate(cme = cmes) %>% 
-    group_by(across(X1:X150)) %>% summarize(cmes = list(cme))
-similarcmes <- mixtures$cmes
-mixtures <- mixtures %>% select(-cmes)
-write_csv(mixtures, "mixtures.csv", col_names = F)
+plugins <- data.frame(plugins) %>% mutate(cme = cmes)
+colnames(plugins)[1:2] <- c("p", "size")
+
+mixtures <- data.frame(mixtures) %>% mutate(cme = cmes) %>% left_join(plugins, by = "cme")
+mixturelist <- mixtures %>% group_by(across(c(X1:X150, p, size))) %>% summarize(cmes = list(cme)) %>% ungroup
+mixtures <- mixturelist %>% select(X1:X150)
+plugins <- mixturelist %>% select(p, size)
+mixturelist <- mixturelist %>% pull(cmes)
+
+# write_csv(mixtures, "mixtures.csv", col_names = F)
 ```
 
 ## CME fitting
 ```{r}
 fits <- data.frame(cme = cmes, 
-                   pihat = 0, pim = 0, pil = 0, piu = 0, pim = 0,
+                   pihat = 0, pim = 0, pil = 0, piu = 0,
                    R0hat = 0, R0m = 0, R0l = 0, R0u = 0,
                    loglik = -Inf)
 
-for (i in 1:length(cmes)) {
+load <- function(i) {
+    counts <- as.matrix(data.table::fread(paste0("results/counts_", i, ".csv")))
+    colnames(counts)[51:53] <- c("N", "R0", "pi")
     counts[, 1:O] <- counts[, 1:O] + 1 / 10
     divider <- rowSums(counts[, 1:O])
     counts[, 1:O] <- apply(counts[, 1:O], 2, \(x) x / divider)
-    
-    
-    
-    logliks <- fitting(NI %>% filter(cme == cmes[i]) %>% select(N, I), counts)
-    fits[i, 2:5] <- unlist(getinterval(logliks, "pi", F))
-    fits[i, 6:9] <- unlist(getinterval(logliks, "R0", F))
-    fits[i, 10] <- max(logliks$loglik)
+    counts
 }
 
+for (i in 1:nrow(plugins)) {
+    counts <- load(i)
+    p = plugins[i, ]$p
+    size = plugins[i, ]$size
+    for (c in mixturelist[[i]]) {
+        statistics <- NI %>% filter(cme == c) %>% select(N, I)
+        logliks <- data.frame(fitting(statistics, counts, size, p))
+        whichcme = which(cmes == c)
+        print(paste(i, whichcme))
+        fits[whichcme, 2:5] <- unlist(getinterval(logliks, "pi", F))
+        fits[whichcme, 6:9] <- unlist(getinterval(logliks, "R0", F))
+        fits[whichcme, 10] <- max(logliks$loglik)
+        
+    }
+}
 write_csv(fits, "fits_marc_2.csv")
 ```
 
+check 54
+
 ## Viz
 ```{r}
-fits <- read_csv("fits_42.csv")
+fits <- read_csv("fits_marc_2.csv")
 fits <- left_join(fits, NI %>% group_by(cme) %>% summarize(N = mean(N)), by = "cme")
 
-fits %>% filter(!(R0l == min(R0) & R0u == max(R0))) %>% 
+fits %>%
     arrange(-R0m * N) %>% 
     mutate(cme = row_number()) %>% 
     ggplot(aes(x = cme, y = R0m * N)) +
@@ -171,7 +192,7 @@ fits %>% filter(!(R0l == min(R0) & R0u == max(R0))) %>%
     ylab("R0") +
     theme(text = element_text(size = 12, family = "mono"))
 
-fits %>% filter(!(R0l == min(R0) & R0u == max(R0))) %>% 
+fits %>%
     arrange(-pim) %>% 
     mutate(cme = row_number()) %>% 
     ggplot(aes(x = cme, y = pim)) +
@@ -203,11 +224,11 @@ fits %>% filter(!(R0l == min(R0) & R0u == max(R0))) %>%
 tester <- "c4"
 testpar <- fits %>% filter(cme == tester) %>% select(R0 = R0m, pi = pim)
 
-plotcounts <- counts %>% filter(R0 == R0[which.min(abs(testpar$R0 - R0))], 
-                                pi == pi[which.min(abs(testpar$pi - pi))])
+plotcounts <- load(which.max(unlist(lapply(mixturelist, \(x) sum(x == tester)))))
+plotcounts <- plotcounts[plotcounts[, "R0"] == R0[which.min(abs(testpar$R0 - R0))] &
+    plotcounts[, "pi"] == pi[which.min(abs(testpar$pi - pi))], ]
 
-gatherNI <- colSums(plotcounts[sapply(NI %>% filter(cme == tester) %>% pull(N), 
-                                      \(x) which(mu == x)), 1:O])
+gatherNI <- colSums(plotcounts[NI %>% filter(cme == tester) %>% pull(N), 1:O])
 gatherNI <- gatherNI / sum(gatherNI)
 
 cmedat %>%
