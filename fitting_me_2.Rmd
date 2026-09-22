@@ -118,21 +118,48 @@ plugins <- plugins %>% distinct(mu, var)
 # write_csv(plugins, "plugins.csv", col_names = F)
 ```
 
+## Convert simulations to correct format
+```{r}
+converter <- function(i) {
+    i <- 14
+    tmpcounts <- t(data.table::fread(paste0("results/counts_", i, ".csv")))
+    
+    R0s <- rep(0, 100 ^ 2)
+    pis <- rep(0, 100 ^ 2)
+    for (j in 1:100) {
+        for (k in 1:100) {
+            idx <- 100 * (j - 1) + k
+            R0s[idx] <- R0[j]
+            pis[idx] <- pis[k]
+        }
+    }
+    
+    shapely <- matrix(0, 100 * 160, 53)
+    for (j in 1:160) {
+        shapely[100 * (j - 1) + (1:100), 51] <- j
+        shapely[100 * (j - 1) + (1:100), c(1:50, 52:53)] <-
+            as.matrix(tmpcounts[, c(50 * (j - 1) + (1:50), 8001:8002)])
+    }
+    shapely
+}
+shapeliest <- matrix(0, 100 * 100 * 160, 53)
+for (i in 1:100) {
+    print(i)
+    shapeliest[(1:(100 * 160)) + 100 * 160 * (i - 1), ] <- converter(i)
+}
+shapeliest <- as.data.frame(shapeliest)
+colnames(shapeliest)[51:53] <- c("N","R0","pi")
+write_csv(shapeliest, "c4_me.csv")
+```
+
 ## CME fitting
 ```{r}
-i <- 14
-counts <- read_csv(paste0("results/counts_", i, ".csv"))
-
-counts <- t(data.table::fread(paste0("results/counts_", i, ".csv")))
-
 fits <- data.frame(cme = cmes, 
                    pihat = 0, pim = 0, pil = 0, piu = 0, pim = 0,
                    R0hat = 0, R0m = 0, R0l = 0, R0u = 0,
                    loglik = -Inf)
 
 for (i in 1:nrow(plugins)) {
-    i <- 1
-    counts <- read_csv(paste0("results_me_2/counts_", i, ".csv"))
     counts[, 1:O] <- counts[, 1:O] + 1 / 10
     divider <- rowSums(counts[, 1:O])
     counts[, 1:O] <- apply(counts[, 1:O], 2, \(x) x / divider)
