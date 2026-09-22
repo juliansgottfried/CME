@@ -14,7 +14,7 @@ addprocs(SlurmManager())
 @everywhere nbin = 50
 @everywhere nN = 168
 
-@everywhere l = 5
+@everywhere l = 10
 @everywhere chunk = 1
 
 pmap(1:size(mixtures)[1]) do i
