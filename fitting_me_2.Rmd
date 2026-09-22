@@ -112,10 +112,16 @@ for (i in 1:length(cmes)) {
 ## Means and variances
 ```{r}
 plugins <- NI %>% group_by(cme) %>% summarize(mu = mean(N), var = var(N))
-pluginlist <- plugins %>% group_by(mu, var) %>% 
-    summarize(cmes = list(cme)) %>% pull(cmes)
+pluginlist <- plugins %>% group_by(mu, var) %>% summarize(cmes = list(cme))
 plugins <- plugins %>% distinct(mu, var)
+pluginlist <- left_join(plugins %>% select(mu, var), pluginlist, by = c("mu", "var")) %>% pull(cmes)
+
 # write_csv(plugins, "plugins.csv", col_names = F)
+
+# plugins <- NI %>% group_by(cme) %>% summarize(mu = mean(N), var = var(N))
+# plugins <- plugins %>% group_by(mu, var) %>% summarize(cmes = list(cme))
+# pluginlist <- plugins %>% pull(cmes)
+# plugins <- plugins %>% ungroup %>% select(mu, var)
 ```
 
 ## Convert simulations to correct format
@@ -158,7 +164,6 @@ load <- function(i) {
 }
 
 for (i in 1:nrow(plugins)) {
-    print(i)
     counts <- load(i)
     mu <- plugins[i, ]$mu
     var <- plugins[i, ]$var
@@ -168,7 +173,7 @@ for (i in 1:nrow(plugins)) {
         statistics <- NI %>% filter(cme == cmes[i]) %>% select(N, I)
         logliks <- data.frame(fitting(statistics, counts, size, p))
         whichcme = which(cmes == cme)
-        print(whichcme)
+        print(paste(i, whichcme))
         fits[whichcme, 2:5] <- unlist(getinterval(logliks, "pi", F))
         fits[whichcme, 6:9] <- unlist(getinterval(logliks, "R0", F))
         fits[whichcme, 10] <- max(logliks$loglik)
@@ -176,16 +181,14 @@ for (i in 1:nrow(plugins)) {
     }
 }
 write_csv(fits, "fits_me_2.csv")
-
-data.table::fread("counts_1_1.csv") %>% View
 ```
 
 ## Viz
 ```{r}
-fits <- read_csv("fits_42.csv")
+fits <- read_csv("fits_me_2.csv")
 fits <- left_join(fits, NI %>% group_by(cme) %>% summarize(N = mean(N)), by = "cme")
 
-fits %>% filter(!(R0l == min(R0) & R0u == max(R0))) %>% 
+fits %>%
     arrange(-R0m * N) %>% 
     mutate(cme = row_number()) %>% 
     ggplot(aes(x = cme, y = R0m * N)) +
@@ -196,7 +199,7 @@ fits %>% filter(!(R0l == min(R0) & R0u == max(R0))) %>%
     ylab("R0") +
     theme(text = element_text(size = 12, family = "mono"))
 
-fits %>% filter(!(R0l == min(R0) & R0u == max(R0))) %>% 
+fits %>%
     arrange(-pim) %>% 
     mutate(cme = row_number()) %>% 
     ggplot(aes(x = cme, y = pim)) +
