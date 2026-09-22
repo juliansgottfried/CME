@@ -3,10 +3,10 @@
 using Distributed, SlurmClusterManager
 addprocs(SlurmManager())
 
-@everywhere include("/scratch/users/jgottf/CME/convertfunctions.jl")
+@everywhere include("/scratch/users/jgottf/CME/helpconvert.jl")
 @everywhere import DelimitedFiles
 
-@everywhere mixtures = DelimitedFiles.readdlm("/scratch/users/jgottf/CME/mixtures.csv", ',')[2:115, :]
+@everywhere mixtures = DelimitedFiles.readdlm("/scratch/users/jgottf/CME/mixtures.csv", ',')
 
 @everywhere R0 = (0:0.002:(0.2 - 0.002))
 @everywhere π = 0:0.0005:(0.05 - 0.0005)
@@ -20,5 +20,5 @@ addprocs(SlurmManager())
 pmap(1:size(mixtures)[1]) do i
     shapeliest = zeros(Float64, nN * length(π) * l, nbin + 3)
     Helper.makeshapely!(mixtures[i, :], R0, π, μ, nbin, nN, shapeliest, l, chunk)
-    DelimitedFiles.writedlm("/scratch/users/jgottf/CME/cme_results/counts_$(i)_$(chunk).csv", shapeliest, ',')
+    DelimitedFiles.writedlm("/scratch/users/jgottf/CME/cme_results_marc_2/counts_$(i)_$(chunk).csv", shapeliest, ',')
 end
