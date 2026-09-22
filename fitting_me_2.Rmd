@@ -112,24 +112,11 @@ for (i in 1:length(cmes)) {
 
 ## Mixtures for conversion in cluster
 ```{r}
-mixtures <- matrix(0, nrow = length(cmes), ncol = 150)
-for (i in 1:length(cmes)) {
-    tmpN <- NI %>% filter(cme == cmes[i]) %>% pull(N)
-    tmpmu <- mean(tmpN)
-    tmpvar <- var(tmpN)
-    
-    p = tmpmu / tmpvar
-    scale = (1 - p) / p
-    shape = p * tmpmu / (1 - p)
-
-    mixtures[i, ] <- sapply(mu, \(x) pgamma(x, shape = shape, scale = scale) - 
-               pgamma(x - 1, shape = shape, scale = scale))
-}
-mixtures <- data.frame(mixtures) %>% mutate(cme = cmes) %>% 
-    group_by(across(X1:X150)) %>% summarize(cmes = list(cme))
-similarcmes <- mixtures$cmes
-mixtures <- mixtures %>% select(-cmes)
-write_csv(mixtures, "mixtures.csv", col_names = F)
+plugins <- NI %>% group_by(cme) %>% summarize(mu = mean(N), var = var(N))
+pluginlist <- plugins %>% group_by(mu, var) %>% 
+    summarize(cmes = list(cme)) %>% pull(cmes)
+plugins <- plugins %>% distinct(mu, var)
+write_csv(plugins, "plugins.csv", col_names = F)
 ```
 
 ## CME fitting
