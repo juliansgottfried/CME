@@ -21,9 +21,7 @@ addprocs(SlurmManager())
 
 @everywhere nN = 168
 
-@everywhere idx = [2; 4; 13; 18; 22; 37; 42; 53; 54; 61:64; 68; 72; 73; 75; 79; 82; 87; 90; 94; 100; 104; 107; 109]
-
-pmap(idx) do i
+pmap(eachindex(μ)) do i
     counts = zeros(Int, nbin * nN, length(R0) * length(π))
     len = Int(G / inter)
     all = zeros(Int, nN, J * len)

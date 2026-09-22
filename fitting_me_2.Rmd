@@ -66,7 +66,6 @@ O <- 50
 
 R0 <- seq(from = 0, by = 0.002, to = 0.2 - 0.002)
 pi <- seq(from = 0, by = 0.0005, to = 0.05 - 0.0005)
-mu <- 1:150
 ```
 
 ## CME data
@@ -110,13 +109,13 @@ for (i in 1:length(cmes)) {
 }
 ```
 
-## Mixtures for conversion in cluster
+## Means and variances
 ```{r}
 plugins <- NI %>% group_by(cme) %>% summarize(mu = mean(N), var = var(N))
 pluginlist <- plugins %>% group_by(mu, var) %>% 
     summarize(cmes = list(cme)) %>% pull(cmes)
 plugins <- plugins %>% distinct(mu, var)
-write_csv(plugins, "plugins.csv", col_names = F)
+# write_csv(plugins, "plugins.csv", col_names = F)
 ```
 
 ## CME fitting
@@ -125,6 +124,18 @@ fits <- data.frame(cme = cmes,
                    pihat = 0, pim = 0, pil = 0, piu = 0, pim = 0,
                    R0hat = 0, R0m = 0, R0l = 0, R0u = 0,
                    loglik = -Inf)
+
+for (i in 1:nrow(plugins)) {
+    i <- 1
+    counts <- read_csv(paste0("results_me_2/counts_", i, ".csv"))
+    counts[, 1:O] <- counts[, 1:O] + 1 / 10
+    divider <- rowSums(counts[, 1:O])
+    counts[, 1:O] <- apply(counts[, 1:O], 2, \(x) x / divider)
+    
+    for (cme in pluginlist[[i]]) {
+         fitting(NI %>% filter(cme == cmes[i]) %>% select(N, I), counts)
+    }
+}
 
 for (i in 1:length(cmes)) {
     counts[, 1:O] <- counts[, 1:O] + 1 / 10
@@ -139,7 +150,7 @@ for (i in 1:length(cmes)) {
     fits[i, 10] <- max(logliks$loglik)
 }
 
-write_csv(fits, "fits_marc_2.csv")
+write_csv(fits, "fits_me_2.csv")
 ```
 
 ## Viz
