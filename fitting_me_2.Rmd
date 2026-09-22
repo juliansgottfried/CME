@@ -127,26 +127,19 @@ converter <- function(i) {
     R0s <- rep(0, 100 ^ 2)
     pis <- rep(0, 100 ^ 2)
     for (j in 1:100) {
-        for (k in 1:100) {
-            idx <- 100 * (j - 1) + k
-            R0s[idx] <- R0[j]
-            pis[idx] <- pis[k]
-        }
+        idcs <- 100 * (j - 1) + (1:100)
+        R0s[idcs] <- R0[j]
+        pis[idcs] <- pi[1:100]
     }
     
-    shapely <- matrix(0, 100 * 160, 53)
-    for (j in 1:160) {
-        shapely[100 * (j - 1) + (1:100), 51] <- j
-        shapely[100 * (j - 1) + (1:100), c(1:50, 52:53)] <-
-            as.matrix(tmpcounts[, c(50 * (j - 1) + (1:50), 8001:8002)])
+    shapely <- matrix(0, 10000 * 168, 53)
+    for (j in 1:168) {
+        shapely[10000 * (j - 1) + (1:10000), 51] <- j
+        shapely[10000 * (j - 1) + (1:10000), 1:50] <- tmpcounts[, 50 * (j - 1) + (1:50)]
     }
-    shapely
+    write_csv(cbind(shapely, R0s, pis), paste0("results_me_2/counts", i, ".csv"))
 }
-shapeliest <- matrix(0, 100 * 100 * 160, 53)
-for (i in 1:100) {
-    print(i)
-    shapeliest[(1:(100 * 160)) + 100 * 160 * (i - 1), ] <- converter(i)
-}
+
 shapeliest <- as.data.frame(shapeliest)
 colnames(shapeliest)[51:53] <- c("N","R0","pi")
 write_csv(shapeliest, "c4_me.csv")

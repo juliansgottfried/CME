@@ -15,7 +15,7 @@ addprocs(SlurmManager())
 @everywhere nN = 168
 
 @everywhere l = 10
-@everywhere chunk = 6
+@everywhere chunk = 7
 
 pmap(1:size(mixtures)[1]) do i
     shapeliest = zeros(Float64, nN * length(π) * l, nbin + 3)
