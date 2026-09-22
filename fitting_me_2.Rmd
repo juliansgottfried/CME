@@ -160,16 +160,15 @@ load <- function(i) {
 for (i in 1:nrow(plugins)) {
     print(i)
     counts <- load(i)
-    
     mu <- plugins[i, ]$mu
     var <- plugins[i, ]$var
     p = mu / var
     size = p * mu / (1 - p)
-    
     for (cme in pluginlist[[i]]) {
         statistics <- NI %>% filter(cme == cmes[i]) %>% select(N, I)
         logliks <- data.frame(fitting(statistics, counts, size, p))
         whichcme = which(cmes == cme)
+        print(whichcme)
         fits[whichcme, 2:5] <- unlist(getinterval(logliks, "pi", F))
         fits[whichcme, 6:9] <- unlist(getinterval(logliks, "R0", F))
         fits[whichcme, 10] <- max(logliks$loglik)
@@ -177,6 +176,8 @@ for (i in 1:nrow(plugins)) {
     }
 }
 write_csv(fits, "fits_me_2.csv")
+
+data.table::fread("counts_1_1.csv") %>% View
 ```
 
 ## Viz

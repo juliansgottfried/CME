@@ -34,4 +34,9 @@ function makeshapely!(mixture, R0, π, μ, nbin, nN, shapeliest, l, chunk)
     end
 end
 
+function loop!(counts, i, j)
+    counts[(1:168000) .+ 168000(j - 1), :] .= 
+            DelimitedFiles.readdlm("/scratch/users/jgottf/CME/cme_results_marc_2/counts_$(i)_$(j).csv", ',')
+end
+
 end

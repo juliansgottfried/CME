@@ -142,7 +142,7 @@ divider <- rowSums(counts[, 1:O])
 counts[, 1:O] <- apply(counts[, 1:O], 2, \(x) x / divider)
 
 fits <- data.frame(cme = cmes, 
-                   pihat = 0, pim = 0, pil = 0, piu = 0, pim = 0,
+                   pihat = 0, pim = 0, pil = 0, piu = 0,
                    R0hat = 0, R0m = 0, R0l = 0, R0u = 0,
                    loglik = -Inf)
 for (i in 1:length(cmes)) {
