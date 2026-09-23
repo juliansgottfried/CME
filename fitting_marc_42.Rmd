@@ -25,7 +25,7 @@ fitting <- function(statistics, counts) {
         slimdata <- statistics %>% filter(N == j)
         slimI <- as.numeric(unname(table(factor(slimdata$I, levels = 0:(O-1)))))
         factor <- factor + log(factorial(sum(slimI))) - sum(log(factorial(slimI)))
-        slimfreq <- counts %>% filter(mu == j)
+        slimfreq <- counts[counts["mu"] == j, ]
         loglik <- loglik + apply(slimfreq[, 1:O], 1, \(x) sum(slimI * log(x)))
     }
     loglik <- loglik + factor + sum(dpois(statistics$N, statistics$N, log = T))
@@ -63,7 +63,7 @@ getinterval <- function(logliks, var, makeplot) {
 N <- 42
 O <- 50
 
-R0 <- seq(from = 0, by = 0.001, to = 0.1 - 0.001)
+R0 <- seq(from = 0, by = 0.002, to = 0.2 - 0.002)
 pi <- seq(from = 0, by = 0.0005, to = 0.05 - 0.0005)
 ```
 
@@ -114,7 +114,7 @@ mu <- mu[2:length(mu)]
 ## Convert simulations to correct format
 ```{r}
 converter <- function(i) {
-    tmpcounts <- t(fread(paste0("results/counts_", i,".csv"), header = F))
+    tmpcounts <- t(data.table::fread(paste0("results/counts_", i,".csv"), header = F))
     tmpcounts <- cbind(tmpcounts, R0[i], 0, 0)
     for (j in 1:length(pi)) {
         for (k in 1:length(mu)) {
@@ -137,7 +137,7 @@ write_csv(shapeliestdf, "marc_42.csv")
 
 ## CME fitting
 ```{r}
-counts <- read_csv("marc_42.csv")
+counts <- read_csv("counts_marc_42.csv")
 counts[, 1:O] <- counts[, 1:O] + 1 / 10
 divider <- rowSums(counts[, 1:O])
 counts[, 1:O] <- apply(counts[, 1:O], 2, \(x) x / divider)
@@ -153,12 +153,12 @@ for (i in 1:length(cmes)) {
     fits[i, 6:9] <- unlist(getinterval(logliks, "R0", F))
     fits[i, 10] <- max(logliks$loglik)
 }
-write_csv(fits, "fits_42.csv")
+write_csv(fits, "fits_marc_42.csv")
 ```
 
 ## Viz
 ```{r}
-fits <- read_csv("fits_42.csv")
+fits <- read_csv("fits_marc_42.csv")
 fits <- left_join(fits, NI %>% group_by(cme) %>% summarize(N = mean(N)), by = "cme")
 
 fits %>% filter(!(R0l == min(R0) & R0u == max(R0))) %>% 
@@ -194,9 +194,6 @@ fits %>% filter(!(R0l == min(R0) & R0u == max(R0))) %>%
     theme_classic() +
     xlab("R0") + 
     theme(text = element_text(size = 12, family = "mono"))
-
-fits %>% filter(!(R0l == min(R0) & R0u == max(R0))) %>% 
-    mutate(R0l = R0l * N, R0u = R0u * N, R0m = R0m * N) %>% filter(R0m >= 1)
 ```
 
 ## Examining specific CMEs

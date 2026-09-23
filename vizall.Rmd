@@ -1,0 +1,118 @@
+---
+title: "vizall"
+author: "Julian Gottfried"
+date: "2026-09-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+setwd("~/Desktop/CME")
+```
+
+Requires NI from other file.
+
+```{r}
+fits1 <- read_csv("fits_me_2.csv") %>% mutate(fit = "nb")
+fits2 <- read_csv("fits_marc_2.csv") %>% mutate(fit = "gp")
+fits3 <- read_csv("fits_marc_42.csv") %>% mutate(fit = "p")
+
+fits <- rbind(fits1, fits2, fits3) %>% 
+    mutate(fit = factor(fit, levels = c("p", "gp", "nb"))) %>% 
+    group_by(fit) %>% 
+    mutate(identified = 
+               !(R0l == min(R0l) & R0u == max(R0u)) &
+               !(pil == min(pil) & piu == max(piu))) %>% 
+    ungroup %>% mutate(identifiedfac = factor(identified, levels = c(T, F)))
+
+fits <- left_join(fits, NI %>% group_by(cme) %>% summarize(N = mean(N)), by = "cme") %>% 
+    mutate(R0m_eff = R0m * N, R0u_eff = R0u * N, R0l_eff = R0l * N) %>% 
+    mutate(thresh = R0m_eff >= 1)
+```
+
+```{r}
+labels <- c("p" = "independent Poissons",
+            "gp" = "Gamma-Poisson",
+            "nb" = "negative binomial")
+plotting <- function(fits, whichfit, whichpar, identifiable) {
+    plotter <- fits
+    
+    plotter$parm = unlist(plotter[, paste0(whichpar, "m")])
+    plotter$parl = unlist(plotter[, paste0(whichpar, "l")])
+    plotter$paru = unlist(plotter[, paste0(whichpar, "u")])
+    
+    if (identifiable) {
+        plotter <- plotter %>% filter(identified)
+        plotter$colorer = !plotter$thresh
+        labs <- c("R0 \u2265 1", "R0 < 1")
+    } else {
+        plotter$colorer = plotter$identifiedfac
+        labs <- c("identifiable", "non")
+    }
+    ordered <- plotter %>% filter(fit == whichfit) %>% arrange(-parm) %>% 
+        mutate(idx = row_number()) %>% select(cme, idx)
+    plotter <- left_join(plotter, ordered, by = "cme")
+    if (whichpar == "R0") { ylab = "beta / gamma"
+    } else ylab = "\u03C0"
+    plotter %>% 
+        ggplot(aes(x = idx, y = parm, color = colorer)) +
+        geom_linerange(aes(ymin = parl, ymax = paru), alpha = 0.15) +
+        geom_point(alpha = 0.8, shape = 3) +
+        scale_color_manual(name = "", labels = labs,
+                           values = c("black", "#abc4c1")) +
+        theme_classic() +
+        ylab(ylab) + xlab("cme") +
+        facet_wrap(~fit, labeller = as_labeller(labels)) +
+        theme(text = element_text(size = 12, family = "mono"))
+}
+```
+
+```{r}
+plotting(fits, "gp", "R0", F)
+plotting(fits, "gp", "pi", F)
+plotting(fits, "gp", "R0", T)
+plotting(fits, "gp", "pi", T)
+
+fits %>% group_by(fit) %>% 
+    summarize(fraction_identified = sum(identified) / n()) %>% 
+    ggplot(aes(x = 1, y = fraction_identified, group = fit)) +
+    geom_col(position = "dodge", stat = "identity",
+             color = "white", fill = "black") +
+    coord_flip() +
+    scale_x_continuous(breaks = c(0.75, 1, 1.25), labels = labels, name = "") +
+    ylab("fraction identified") +
+    theme_classic() +
+    theme(text = element_text(size = 12, family = "mono"))
+
+fits %>% filter(identified) %>% 
+    ggplot(aes(x = R0m, y = loglik)) +
+    geom_point(shape = 1) +
+    theme_classic() +
+    xlab("beta / gamma") + 
+    facet_wrap(~fit, labeller = as_labeller(labels)) +
+    theme(text = element_text(size = 12, family = "mono"))
+
+fits %>% filter(identified) %>% ggplot(aes(x = loglik, y = fit)) +
+    ggridges::geom_density_ridges(alpha = 0.7,fill = "lightgrey") +
+    theme_classic() +
+    scale_y_discrete(labels = labels, name = "") +
+    theme(text = element_text(size = 12, family = "mono"))
+
+fits %>%  filter(identified) %>% ggplot(aes(x = R0m, y = fit)) +
+    ggridges::geom_density_ridges(alpha = 0.7,fill = "lightgrey") +
+    theme_classic() +
+    scale_y_discrete(labels = labels, name = "") +
+    xlab("beta / gamma") +
+    theme(text = element_text(size = 12, family = "mono"))
+
+fits %>%  filter(identified, thresh) %>% ggplot(aes(x = R0m, y = fit)) +
+    ggridges::geom_density_ridges(alpha = 0.7,fill = "lightgrey") +
+    theme_classic() +
+    scale_y_discrete(labels = labels, name = "") +
+    xlab("beta / gamma") +
+    theme(text = element_text(size = 12, family = "mono"))
+```
