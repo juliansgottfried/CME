@@ -30,8 +30,8 @@ fits <- rbind(fits1, fits2, fits3) %>%
     ungroup %>% mutate(identifiedfac = factor(identified, levels = c(T, F)))
 
 fits <- left_join(fits, NI %>% group_by(cme) %>% summarize(N = mean(N)), by = "cme") %>% 
-    mutate(R0m_eff = R0m * N, R0u_eff = R0u * N, R0l_eff = R0l * N) %>% 
-    mutate(thresh = R0m_eff >= 1)
+    mutate(R0effm = R0m * N, R0effu = R0u * N, R0effl = R0l * N) %>% 
+    mutate(thresh = R0effm >= 1)
 ```
 
 ```{r}
@@ -57,6 +57,7 @@ plotting <- function(fits, whichfit, whichpar, identifiable) {
         mutate(idx = row_number()) %>% select(cme, idx)
     plotter <- left_join(plotter, ordered, by = "cme")
     if (whichpar == "R0") { ylab = "beta / gamma"
+    } else if (whichpar == "R0eff") { ylab = "R0"
     } else ylab = "\u03C0"
     plotter %>% 
         ggplot(aes(x = idx, y = parm, color = colorer)) +
@@ -74,7 +75,9 @@ plotting <- function(fits, whichfit, whichpar, identifiable) {
 ```{r}
 plotting(fits, "gp", "R0", F)
 plotting(fits, "gp", "pi", F)
+
 plotting(fits, "gp", "R0", T)
+plotting(fits, "gp", "R0eff", T)
 plotting(fits, "gp", "pi", T)
 
 fits %>% group_by(fit) %>% 
@@ -85,6 +88,7 @@ fits %>% group_by(fit) %>%
     coord_flip() +
     scale_x_continuous(breaks = c(0.75, 1, 1.25), labels = labels, name = "") +
     ylab("fraction identified") +
+    ylim(0, 1) +
     theme_classic() +
     theme(text = element_text(size = 12, family = "mono"))
 
