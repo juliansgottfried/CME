@@ -30,13 +30,14 @@ fits <- rbind(fits1, fits2, fits3) %>%
     ungroup %>% mutate(identifiedfac = factor(identified, levels = c(T, F)))
 
 fits <- left_join(fits, NI %>% group_by(cme) %>% summarize(N = mean(N)), by = "cme") %>% 
-    mutate(R0effm = R0m * N, R0effu = R0u * N, R0effl = R0l * N) %>% 
-    mutate(thresh = R0effm >= 1)
+    mutate(R0effm = R0m * N, R0effl = R0l * N, R0effu = R0u * N) %>% 
+    mutate(thresh = R0effm >= 1) %>% mutate(k = ifelse(fit == "p", 44, 4)) %>% 
+    mutate(aic = 2 * (k - loglik))
 ```
 
 ```{r}
-labels <- c("p" = "independent Poissons",
-            "gp" = "Gamma-Poisson",
+labels <- c("p" = "poisson_i",
+            "gp" = "gamma-poisson",
             "nb" = "negative binomial")
 plotting <- function(fits, whichfit, whichpar, identifiable) {
     plotter <- fits
@@ -66,9 +67,33 @@ plotting <- function(fits, whichfit, whichpar, identifiable) {
         scale_color_manual(name = "", labels = labs,
                            values = c("black", "#abc4c1")) +
         theme_classic() +
-        ylab(ylab) + xlab("cme") +
+        ylab(ylab) + xlab("cme (rank-ordered)") +
         facet_wrap(~fit, labeller = as_labeller(labels)) +
         theme(text = element_text(size = 12, family = "mono"))
+}
+pairwise <- function(fits, par, whichfits) {
+    # par <- "pim"
+    # whichfits <- c("p","gp")
+    plotfits <- fits %>% filter(identified) %>% select(cme, fit, par = starts_with(par)) %>%
+        pivot_wider(id_cols = cme, 
+                    values_from = c(par), 
+                    names_from = fit)
+    idx1 <- which(colnames(plotfits) == whichfits[1])
+    idx2 <- which(colnames(plotfits) == whichfits[2])
+    colnames(plotfits)[c(idx1, idx2)] <- c("x", "y")
+    parlab <- par
+    fitlabs <- c("negative binomial", "gamma-poisson", "poisson_i")[c(idx1 - 1, idx2 - 1)]
+    if (parlab == "R0m") parlab <- "beta / gamma"
+    if (parlab == "R0effm") parlab <- "R0"
+    if (parlab == "pim") parlab <- "\u03C0"
+    plotfits %>% 
+        ggplot(aes(x = x, y = y)) +
+        geom_point(shape = 1) +
+        geom_abline(color = "red", linetype = 2) +
+        ylab(paste0(parlab, ", ", fitlabs[2])) + xlab(paste0(parlab, ", ", fitlabs[1])) +
+        theme_classic() +
+        theme(text = element_text(size = 12, family = "mono")) +
+        coord_equal()
 }
 ```
 
@@ -81,7 +106,7 @@ plotting(fits, "gp", "R0eff", T)
 plotting(fits, "gp", "pi", T)
 
 fits %>% group_by(fit) %>% 
-    summarize(fraction_identified = sum(identified) / n()) %>% 
+    summarize(fraction_identified = sum(identified) / n()) %>%
     ggplot(aes(x = 1, y = fraction_identified, group = fit)) +
     geom_col(position = "dodge", stat = "identity",
              color = "white", fill = "black") +
@@ -106,17 +131,31 @@ fits %>% filter(identified) %>% ggplot(aes(x = loglik, y = fit)) +
     scale_y_discrete(labels = labels, name = "") +
     theme(text = element_text(size = 12, family = "mono"))
 
-fits %>%  filter(identified) %>% ggplot(aes(x = R0m, y = fit)) +
+fits %>% filter(identified) %>% ggplot(aes(x = R0m, y = fit)) +
     ggridges::geom_density_ridges(alpha = 0.7,fill = "lightgrey") +
     theme_classic() +
     scale_y_discrete(labels = labels, name = "") +
     xlab("beta / gamma") +
     theme(text = element_text(size = 12, family = "mono"))
 
-fits %>%  filter(identified, thresh) %>% ggplot(aes(x = R0m, y = fit)) +
+fits %>% filter(identified, thresh) %>% ggplot(aes(x = R0m, y = fit)) +
     ggridges::geom_density_ridges(alpha = 0.7,fill = "lightgrey") +
     theme_classic() +
     scale_y_discrete(labels = labels, name = "") +
     xlab("beta / gamma") +
     theme(text = element_text(size = 12, family = "mono"))
+
+fits %>% left_join(fits %>% filter(fit == "gp") %>% arrange(-aic) %>%
+    mutate(idx = row_number()) %>% select(cme, idx), by = "cme") %>% 
+    ggplot(aes(x = idx, y = aic, color = fit)) +
+    geom_line(alpha = 0.9) + xlab("cme (rank-ordered)") +
+    scale_color_manual(values = c("#4C061D","#129490","#BDE4A7"),
+                       labels = labels, name = "") +
+    theme_classic() +
+    theme(text = element_text(size = 12, family = "mono"))
+
+pairwise(fits, "R0m", c("gp", "nb"))
+pairwise(fits, "R0effm", c("gp", "nb"))
+pairwise(fits, "pim", c("gp", "nb"))
+pairwise(fits, "aic", c("gp", "nb"))
 ```
