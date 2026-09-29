@@ -39,5 +39,5 @@ pmap(eachindex(μ)) do i
             end
         end
     end
-    DelimitedFiles.writedlm("/scratch/users/jgottf/CME/results_me_2/counts_$(i).csv", counts, ',')
+    DelimitedFiles.writedlm("/scratch/users/jgottf/CME/results/counts_$(i).csv", counts, ',')
 end
