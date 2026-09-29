@@ -10,16 +10,17 @@ addprocs(SlurmManager())
 @everywhere μ = plugins[:, 1]
 @everywhere λ = plugins[:, 2] ./ plugins[:, 1] .- 1
 
-@everywhere R0 = (0:0.002:(0.2 - 0.002))
-@everywhere π = 0:0.0005:(0.05 - 0.0005)
+@everywhere R0 = (0:0.0004:(0.2 - 0.0004))
+@everywhere π = 0:0.0002:(0.02 - 0.0002)
 @everywhere ϕ = 0
 
 @everywhere J = 100
 @everywhere G = 50
 @everywhere inter = 1
-@everywhere nbin = 50
+@everywhere nbin = 25
 
-@everywhere nN = 168
+@everywhere conds = DelimitedFiles.readdlm("/scratch/users/jgottf/CME/conds.csv", Int)
+@everywhere nN = size(conds)[1]
 
 pmap(eachindex(μ)) do i
     counts = zeros(Int, nbin * nN, length(R0) * length(π))
@@ -30,7 +31,7 @@ pmap(eachindex(μ)) do i
         for k in eachindex(π)
             println("i: $i, j: $j, k: $k")
             β = R0[j] * (1 + λ[i] * (1 + ϕ * (1 - π[k])))
-            Sim.replication!(all, J, G, inter, nN, len, t, β, π[k], ϕ, μ[i], λ[i])
+            Sim.replication!(all, J, G, inter, conds, nN, len, t, β, π[k], ϕ, μ[i], λ[i])
             all[all .> nbin - 1] .= nbin - 1
             all .+= 1
             for u in 1:nN

@@ -25,29 +25,30 @@ function iterate(g, S, I, β, π, ϕ, μ, λ)
     (g, S, I)
 end
 
-function loop!(Is, nN, G, inter, t, β, π, ϕ, μ, λ)
+function loop!(Is, conds, nN, G, inter, t, β, π, ϕ, μ, λ)
     g = 0
     S = 25
     I = 0
     t .= 0
     while g < G
         N = S + I
-        if N > 0 && N <= nN
-            if g ≥ inter * t[N]
-                t[N] += 1
-                Is[N, t[N]] = I
+        Nidx = (1:nN)[N .== conds]
+        if size(Nidx)[1] > 0
+            if g ≥ inter * t[Nidx[1]]
+                t[Nidx[1]] += 1
+                Is[Nidx[1], t[Nidx[1]]] = I
             end
         end
         g, S, I = iterate(g, S, I, β, π, ϕ, μ, λ)
     end
 end    
 
-function replication!(all, J, G, inter, nN, len, t, β, π, ϕ, μ, λ)
+function replication!(all, J, G, inter, conds, nN, len, t, β, π, ϕ, μ, λ)
     all .= 0
     for j in 1:J
         idx = len * (j - 1) + 1
         @views loop!(all[:, idx:(idx + len - 1)],
-            nN, G, inter, t, β, π, ϕ, μ, λ)
+            conds, nN, G, inter, t, β, π, ϕ, μ, λ)
     end
 end
 

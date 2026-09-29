@@ -49,7 +49,7 @@ plotting <- function(fits, whichfit, whichpar, identifiable) {
     if (identifiable) {
         plotter <- plotter %>% filter(identified)
         plotter$colorer = !plotter$thresh
-        labs <- c("R0 \u2265 1", "R0 < 1")
+        labs <- c("E[N] * R0 \u2265 1", "E[N] * R0 < 1")
     } else {
         plotter$colorer = plotter$identifiedfac
         labs <- c("identifiable", "non")
@@ -57,8 +57,8 @@ plotting <- function(fits, whichfit, whichpar, identifiable) {
     ordered <- plotter %>% filter(fit == whichfit) %>% arrange(-parm) %>% 
         mutate(idx = row_number()) %>% select(cme, idx)
     plotter <- left_join(plotter, ordered, by = "cme")
-    if (whichpar == "R0") { ylab = "beta / gamma"
-    } else if (whichpar == "R0eff") { ylab = "R0"
+    if (whichpar == "R0") { ylab = "R0"
+    } else if (whichpar == "R0eff") { ylab = "E[N] * R0"
     } else ylab = "\u03C0"
     plotter %>% 
         ggplot(aes(x = idx, y = parm, color = colorer)) +
@@ -72,8 +72,6 @@ plotting <- function(fits, whichfit, whichpar, identifiable) {
         theme(text = element_text(size = 12, family = "mono"))
 }
 pairwise <- function(fits, par, whichfits) {
-    # par <- "pim"
-    # whichfits <- c("p","gp")
     plotfits <- fits %>% filter(identified) %>% select(cme, fit, par = starts_with(par)) %>%
         pivot_wider(id_cols = cme, 
                     values_from = c(par), 
@@ -83,8 +81,8 @@ pairwise <- function(fits, par, whichfits) {
     colnames(plotfits)[c(idx1, idx2)] <- c("x", "y")
     parlab <- par
     fitlabs <- c("negative binomial", "gamma-poisson", "poisson_i")[c(idx1 - 1, idx2 - 1)]
-    if (parlab == "R0m") parlab <- "beta / gamma"
-    if (parlab == "R0effm") parlab <- "R0"
+    if (parlab == "R0m") parlab <- "R0"
+    if (parlab == "R0effm") parlab <- "E[N] * R0"
     if (parlab == "pim") parlab <- "\u03C0"
     plotfits %>% 
         ggplot(aes(x = x, y = y)) +
@@ -98,6 +96,12 @@ pairwise <- function(fits, par, whichfits) {
 ```
 
 ```{r}
+NI %>% group_by(cme) %>% summarize(fac = var(N) / mean(N)) %>% 
+    right_join(fits, by = "cme") %>% filter(fit == "nb") %>% 
+    ggplot(aes(x = pim)) +
+    geom_histogram() +
+    theme_classic()
+
 plotting(fits, "gp", "R0", F)
 plotting(fits, "gp", "pi", F)
 
@@ -121,7 +125,7 @@ fits %>% filter(identified) %>%
     ggplot(aes(x = R0m, y = loglik)) +
     geom_point(shape = 1) +
     theme_classic() +
-    xlab("beta / gamma") + 
+    xlab("R0") + 
     facet_wrap(~fit, labeller = as_labeller(labels)) +
     theme(text = element_text(size = 12, family = "mono"))
 
@@ -135,14 +139,14 @@ fits %>% filter(identified) %>% ggplot(aes(x = R0m, y = fit)) +
     ggridges::geom_density_ridges(alpha = 0.7,fill = "lightgrey") +
     theme_classic() +
     scale_y_discrete(labels = labels, name = "") +
-    xlab("beta / gamma") +
+    xlab("R0") +
     theme(text = element_text(size = 12, family = "mono"))
 
 fits %>% filter(identified, thresh) %>% ggplot(aes(x = R0m, y = fit)) +
     ggridges::geom_density_ridges(alpha = 0.7,fill = "lightgrey") +
     theme_classic() +
     scale_y_discrete(labels = labels, name = "") +
-    xlab("beta / gamma") +
+    xlab("R0") +
     theme(text = element_text(size = 12, family = "mono"))
 
 fits %>% left_join(fits %>% filter(fit == "gp") %>% arrange(-aic) %>%

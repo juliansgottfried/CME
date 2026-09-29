@@ -122,6 +122,9 @@ pluginlist <- left_join(plugins %>% select(mu, var), pluginlist, by = c("mu", "v
 # plugins <- plugins %>% group_by(mu, var) %>% summarize(cmes = list(cme))
 # pluginlist <- plugins %>% pull(cmes)
 # plugins <- plugins %>% ungroup %>% select(mu, var)
+
+conds <- sort(unique(NI$N))
+conds[conds > 0] %>% data.frame %>% write_csv("conds.csv", col_names = F)
 ```
 
 ## Convert simulations to correct format
