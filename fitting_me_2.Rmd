@@ -125,6 +125,16 @@ pluginlist <- left_join(plugins %>% select(mu, var), pluginlist, by = c("mu", "v
 
 conds <- sort(unique(NI$N))
 conds[conds > 0] %>% data.frame %>% write_csv("conds.csv", col_names = F)
+
+NI %>% filter(cme == "c4") %>% select(N, I) %>% 
+    write_csv("c4.csv", col_names = F)
+
+NI %>% filter(N > 0) %>% mutate(cme = as.numeric(factor(cme))) %>% 
+    write_csv("NI.csv", col_names = F)
+
+findc4 <- NI %>% filter(N > 0) %>% mutate(cme = (factor(cme))) %>% pull(cme) %>% levels
+which(findc4 == "c4")
+
 ```
 
 ## Convert simulations to correct format
