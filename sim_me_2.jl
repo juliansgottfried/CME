@@ -1,6 +1,6 @@
 module Sim
 
-import StatsBase, Distributions
+import StatsBase, Distributions, DelimitedFiles
 
 function iterate(g, S, I, β, π, ϕ, μ, λ)
     N = S + I
@@ -142,6 +142,10 @@ function loopmcmc!(proposal,
                     Idat, fac,
                     loglik, track, rate, M)
     end
+end
+
+function rw!(input, idx)
+    input .= DelimitedFiles.readdlm("results/fit_$idx.csv", ',')
 end
 
 end

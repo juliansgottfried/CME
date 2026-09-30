@@ -1,0 +1,84 @@
+---
+title: "mcmc"
+author: "Julian Gottfried"
+date: "2026-09-30"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+setwd("~/Desktop/CME")
+```
+
+```{r}
+N <- 42
+O <- 25
+M <- 6000
+burn <- 4000
+```
+
+```{r}
+dat <- NI %>% filter(N > 0) %>% 
+    mutate(idx = as.numeric(factor(cme))) %>% 
+    group_by(cme) %>% mutate(mu = mean(N), var = var(N)) %>% 
+    ungroup
+```
+
+```{r}
+fits <- read_csv("mcmc.csv", col_names = F)
+R0 <- fits[seq(from = 1, to = 353 * 3, by = 3), (burn + 1):M]
+R0 <- R0 %>% mutate(idx = row_number()) %>% 
+    left_join(dat %>% select(cme, idx, mu, var) %>% distinct, 
+              by = "idx") %>%
+    pivot_longer(cols = starts_with("X"), names_to = "t", values_to = "val") %>% 
+    mutate(t = as.numeric(str_remove(t, "X")) - burn) %>% 
+    mutate(R0 = val * mu)
+
+maxval <- 10
+nvals <- 500
+binned <- data.frame(cme = rep(cmes, each = nvals), 
+                     bin = rep(seq(from = 0, to = maxval, 
+                                   length.out = nvals)),
+                     count = 0)
+for (i in unique(binned$cme)) {
+    print(i)
+    tmpR0 <- R0 %>% filter(cme == i) %>% pull(R0)
+    tmpR0[tmpR0 > maxval] = maxval
+    binned$count[binned$cme == i] = 
+        as.numeric(unname(table(factor(ceiling(nvals * tmpR0 / maxval),
+                                       levels = 1:nvals))))
+}
+voption <- 10
+cutoff <- 4
+bgcolor <- viridis::viridis(2, option = voption)[1]
+binned %>% group_by(cme) %>% mutate(freq = count / (M - burn)) %>% 
+    mutate(avg = sum(bin * freq) + rnorm(1, 0, 0.001)) %>% 
+    ungroup %>% mutate(rank = dense_rank(desc(avg))) %>% 
+    mutate(avg = ifelse(avg < 0, 0, avg)) %>% 
+    arrange(cme == "c4") %>%
+    ggplot(aes(x = rank, y = bin, fill = log(freq))) +
+    geom_tile() +
+    geom_point(aes(y = avg, color = cme == "c4"), size = 0.5, shape = 15) +
+    scale_fill_viridis_c(option = voption, name = "log density",
+                         na.value = bgcolor) +
+    ylim(0, cutoff) +
+    scale_color_manual(values = c("white", "red")) +
+    xlab("cme, rank-ordered") + ylab("R0") +
+    theme_classic() +
+    theme(legend.position = "right") +
+    guides(color = "none", size = "none") +
+    theme(text = element_text(size = 12, family = "mono"))
+
+foreitan <- R0 %>% group_by(cme) %>% 
+    summarize(mean = mean(R0),
+              lower = quantile(R0, 0.025),
+              upper = quantile(R0, 0.975))
+foreitan[, 2:4] <- round(foreitan[, 2:4], 3)
+foreitan %>% arrange(-mean) %>% write_csv("fits_for.csv")
+
+```
+
