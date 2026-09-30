@@ -1,10 +1,10 @@
 ml julia
 
 sbatch \
-    --ntasks=353 \
+    --ntasks=121 \
     --cpus-per-task=1 \
-    --mem-per-cpu=2G \
-    --time=00:15:00 \
+    --mem-per-cpu=1G \
+    --time=01:00:00 \
     --output=/scratch/users/jgottf/CME/output/%j.out \
     --error=/scratch/users/jgottf/CME/output/%j.out \
     --partition=normal,hns \

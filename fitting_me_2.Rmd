@@ -134,7 +134,6 @@ NI %>% filter(N > 0) %>% mutate(cme = as.numeric(factor(cme))) %>%
 
 findc4 <- NI %>% filter(N > 0) %>% mutate(cme = (factor(cme))) %>% pull(cme) %>% levels
 which(findc4 == "c4")
-
 ```
 
 ## Convert simulations to correct format
