@@ -29,6 +29,34 @@ dat <- NI %>% filter(N > 0) %>%
 ```
 
 ```{r}
+pvals <- data.frame(cme = cmes, pval1 = 0, pval2 = 0)
+for (i in 1:length(cmes)) {
+    print(i)
+    
+    fj <- suppressMessages(cmemat %>% mutate(inq = cmemat[[cmes[i]]]) %>% 
+        group_by(species) %>% summarize(f = mean(inq)))
+    pi <- left_join(hostdat, fj, by = "species") %>%
+        group_by(aid) %>%
+        select(aid, species, f) %>% 
+        distinct %>% 
+        summarize(pi = 1 - prod(1 - f)) %>%
+        pull(pi)
+    obs <- cmemat %>% mutate(inq = cmemat[[cmes[i]]]) %>% 
+        group_by(aid) %>% summarize(present = sum(inq) > 0) %>% 
+        pull(present) %>% sum
+    pvals$pval1[i] <- poisbinom::ppoisbinom(obs, pi)
+    
+    fj <- NI[NI$cme == cmes[i], ] %>% filter(N > 0) %>% 
+        mutate(f = I / N) %>% pull(f) %>% mean
+    pi <- 1 - (1 - fj) ^ NI[NI$cme == cmes[i], "N"]
+    obs <- cmemat %>% mutate(inq = cmemat[[cmes[i]]]) %>% 
+        group_by(aid) %>% summarize(present = sum(inq) > 0) %>% 
+        pull(present) %>% sum
+    pvals$pval2[i] <- poisbinom::ppoisbinom(obs, pi)
+}
+```
+
+```{r}
 fits <- read_csv("mcmc.csv", col_names = F)
 R0 <- fits[seq(from = 1, to = 353 * 3, by = 3), (burn + 1):M]
 R0 <- R0 %>% mutate(idx = row_number()) %>% 
@@ -37,9 +65,11 @@ R0 <- R0 %>% mutate(idx = row_number()) %>%
     pivot_longer(cols = starts_with("X"), names_to = "t", values_to = "val") %>% 
     mutate(t = as.numeric(str_remove(t, "X")) - burn) %>% 
     mutate(R0 = val * mu)
+```
 
-maxval <- 10
-nvals <- 500
+```{r}
+maxval <- 5
+nvals <- 150
 binned <- data.frame(cme = rep(cmes, each = nvals), 
                      bin = rep(seq(from = 0, to = maxval, 
                                    length.out = nvals)),
@@ -52,33 +82,47 @@ for (i in unique(binned$cme)) {
         as.numeric(unname(table(factor(ceiling(nvals * tmpR0 / maxval),
                                        levels = 1:nvals))))
 }
-voption <- 10
-cutoff <- 4
-bgcolor <- viridis::viridis(2, option = voption)[1]
-binned %>% group_by(cme) %>% mutate(freq = count / (M - burn)) %>% 
+binned <- binned %>% left_join(pvals, by = "cme")
+```
+
+```{r}
+plotter <- binned %>% group_by(cme) %>% 
+    mutate(freq = count / (M - burn)) %>% 
     mutate(avg = sum(bin * freq) + rnorm(1, 0, 0.001)) %>% 
     ungroup %>% mutate(rank = dense_rank(desc(avg))) %>% 
     mutate(avg = ifelse(avg < 0, 0, avg)) %>% 
-    arrange(cme == "c4") %>%
+    arrange(cme == "c4")
+pointplotter <- plotter %>% select(rank, avg, pval1, pval2, cme) %>% distinct
+
+voption <- 10
+bgcolor <- viridis::viridis(2, option = voption)[1]
+plotter %>% 
     ggplot(aes(x = rank, y = bin, fill = log(freq))) +
     geom_tile() +
-    geom_point(aes(y = avg, color = cme == "c4"), size = 0.5, shape = 15) +
-    scale_fill_viridis_c(option = voption, name = "log density",
-                         na.value = bgcolor) +
-    ylim(0, cutoff) +
-    scale_color_manual(values = c("white", "red")) +
-    xlab("cme, rank-ordered") + ylab("R0") +
+    geom_point(data = pointplotter, 
+               mapping = aes(x = rank, y = avg, 
+                             color = cme == "c4",
+                             alpha = cme == "c4"), 
+               size = 1.5, shape = 15, fill = "white") +
+    scale_fill_gradient(low = "white", high = "black",
+                        na.value = "white", name = "log posterior density") +
+    ylim(0, maxval) +
+    scale_color_manual(values = c("#f7f7f7", "red")) +
+    scale_alpha_manual(values = c(0.5, 1)) +
+    labs(x = "cme, rank-ordered", y = expression(R["0"])) +
+    guides(color = "none", alpha = "none") +
     theme_classic() +
-    theme(legend.position = "right") +
-    guides(color = "none", size = "none") +
-    theme(text = element_text(size = 12, family = "mono"))
+    theme(text = element_text(size = 12, family = "mono"),
+          axis.title.y = element_text(angle = 0, vjust = 0.5),
+          legend.position = "bottom",
+          legend.title = element_text(vjust = 0.75))
+```
 
+```{r}
 foreitan <- R0 %>% group_by(cme) %>% 
     summarize(mean = mean(R0),
               lower = quantile(R0, 0.025),
               upper = quantile(R0, 0.975))
 foreitan[, 2:4] <- round(foreitan[, 2:4], 3)
 foreitan %>% arrange(-mean) %>% write_csv("fits_for.csv")
-
 ```
-
