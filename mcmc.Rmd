@@ -21,18 +21,59 @@ M <- 6000
 burn <- 4000
 ```
 
+## CME data
+```{r}
+cmemat <- read.table("eitan_data/host_cme_matrix.txt", header = T, sep = "\t")
+cmes <- colnames(cmemat %>% select(-host_id))
+split <- str_split(cmemat$host_id, "_", simplify = T)
+cmemat$aid <- split[, 1]
+cmemat$genome <- split[, 2]
+cmedat <- cmemat %>% 
+    group_by(aid, genome) %>% 
+    summarize_at(cmes, \(x) sum(x) != 0) %>% 
+    select(-genome) %>% 
+    pivot_longer(cols = -aid, names_to = "cme") %>% 
+    group_by(cme, aid) %>% 
+    summarize(count = sum(value), .groups = "drop")
+
+hostdat <-  read.table("eitan_data/hosts.txt", header = T, sep = "\t")
+cmemat <- left_join(cmemat, hostdat %>% select(species, genus, family, host_id), by = "host_id")
+```
+
+## N and I data
+```{r}
+NI <- data.frame(matrix(0, N * length(cmes), 3))
+colnames(NI) <- c("cme","N","I")
+for (i in 1:length(cmes)) {
+    print(i)
+    fams <- cmemat %>% filter(.[[cmes[i]]]) %>% pull(family) %>% unique
+    Nstats <- suppressMessages(cmemat %>% 
+        filter(family %in% fams) %>% 
+        group_by(aid) %>% 
+        select(aid, genome) %>%
+        distinct %>% 
+        summarize(N = n()))
+    Istats <- suppressMessages(cmemat %>% filter(.[[cmes[i]]]) %>% group_by(aid, genome) %>% 
+        summarize(n = n()) %>% summarize(I = n()))
+    statistics <- left_join(Nstats, Istats, by = "aid")
+    statistics <- rbind(statistics,
+                        data.frame(aid = unique(hostdat$aid), N = 0, I = NA)[!(unique(hostdat$aid) %in% statistics$aid), ])
+    statistics[is.na(statistics)] <- 0
+    NI[N * (i - 1) + (1:N), ] <- statistics %>% mutate(cme = cmes[i]) %>% select(cme, N, I)
+}
+```
+
 ```{r}
 dat <- NI %>% filter(N > 0) %>% 
-    mutate(idx = as.numeric(factor(cme))) %>% 
-    group_by(cme) %>% mutate(mu = mean(N), var = var(N)) %>% 
-    ungroup
+    mutate(idx = as.numeric(factor(cme, levels = cmes))) %>% 
+    select(idx, N, I, cme)
+dat %>% select(idx, N, I) %>% write_csv("NI.csv", col_names = F)
 ```
 
 ```{r}
 pvals <- data.frame(cme = cmes, pval1 = 0, pval2 = 0)
 for (i in 1:length(cmes)) {
     print(i)
-    
     fj <- suppressMessages(cmemat %>% mutate(inq = cmemat[[cmes[i]]]) %>% 
         group_by(species) %>% summarize(f = mean(inq)))
     pi <- left_join(hostdat, fj, by = "species") %>%
@@ -92,7 +133,8 @@ plotter <- binned %>% group_by(cme) %>%
     ungroup %>% mutate(rank = dense_rank(desc(avg))) %>% 
     mutate(avg = ifelse(avg < 0, 0, avg)) %>% 
     arrange(cme == "c4")
-pointplotter <- plotter %>% select(rank, avg, pval1, pval2, cme) %>% distinct
+pointplotter <- plotter %>% select(rank, avg, pval1, pval2, cme) %>%
+    distinct %>% mutate(ptgrp = cme == "c4")
 
 voption <- 10
 bgcolor <- viridis::viridis(2, option = voption)[1]
@@ -101,28 +143,19 @@ plotter %>%
     geom_tile() +
     geom_point(data = pointplotter, 
                mapping = aes(x = rank, y = avg, 
-                             color = cme == "c4",
-                             alpha = cme == "c4"), 
-               size = 1.5, shape = 15, fill = "white") +
+                             color = ptgrp, alpha = ptgrp, size = ptgrp), 
+               shape = 15, fill = "white") +
     scale_fill_gradient(low = "white", high = "black",
                         na.value = "white", name = "log posterior density") +
     ylim(0, maxval) +
     scale_color_manual(values = c("#f7f7f7", "red")) +
     scale_alpha_manual(values = c(0.5, 1)) +
+    scale_size_manual(values = c(0.5, 1)) +
     labs(x = "cme, rank-ordered", y = expression(R["0"])) +
-    guides(color = "none", alpha = "none") +
+    guides(color = "none", alpha = "none", size = "none") +
     theme_classic() +
     theme(text = element_text(size = 12, family = "mono"),
           axis.title.y = element_text(angle = 0, vjust = 0.5),
           legend.position = "bottom",
           legend.title = element_text(vjust = 0.75))
-```
-
-```{r}
-foreitan <- R0 %>% group_by(cme) %>% 
-    summarize(mean = mean(R0),
-              lower = quantile(R0, 0.025),
-              upper = quantile(R0, 0.975))
-foreitan[, 2:4] <- round(foreitan[, 2:4], 3)
-foreitan %>% arrange(-mean) %>% write_csv("fits_for.csv")
 ```

@@ -1,15 +1,15 @@
 module Sim
 
-import StatsBase, Distributions, DelimitedFiles
+import StatsBase, Distributions
 
-function iterate(g, S, I, β, π, ϕ, μ, λ)
+function iterate(g, S, I, β, π, ϕ, μ, λ, γ)
     N = S + I
     Sup = (1 - π) * (μ + λ * N)
     Iup = π * (μ + λ * N)
     Sdown = (1 + λ) * S
     Idown = (1 + λ) * I
     SdownIup = (π * ϕ * λ + β * I) * S
-    IdownSup = (1 - π) * ϕ * λ * I
+    IdownSup = ((1 - π) * ϕ * λ + γ) * I
     rate = Sup + Iup + Sdown + Idown + SdownIup + IdownSup
     g -= 1 / rate * log(rand())
     dart = rand()
@@ -27,7 +27,7 @@ function iterate(g, S, I, β, π, ϕ, μ, λ)
     (g, S, I)
 end
 
-function loop!(Is, nN, G, inter, t, β, π, ϕ, μ, λ)
+function loop!(Is, nN, G, inter, t, β, π, ϕ, μ, λ, γ)
     g = 0
     S = 25
     I = 0
@@ -40,24 +40,34 @@ function loop!(Is, nN, G, inter, t, β, π, ϕ, μ, λ)
                 Is[N, t[N]] = I
             end
         end
-        g, S, I = iterate(g, S, I, β, π, ϕ, μ, λ)
+        g, S, I = iterate(g, S, I, β, π, ϕ, μ, λ, γ)
     end
 end    
 
-function replication!(all, J, G, inter, nN, len, t, β, π, ϕ, μ, λ)
+function replication!(all, J, G, inter, nN, len, t, β, π, ϕ, μ, λ, γ)
     all .= 0
     for j in 1:J
         idx = len * (j - 1) + 1
         @views loop!(all[:, idx:(idx + len - 1)],
-            nN, G, inter, t, β, π, ϕ, μ, λ)
+            nN, G, inter, t, β, π, ϕ, μ, λ, γ)
     end
 end
 
-function propose(θ, proposal)
-    newθ = [log(θ[1]); log(θ[2] / (1 - θ[2]))] .+ Distributions.rand(proposal)
-    newθ[1] = exp(newθ[1])
-    newθ[2] = 1 / (1 + exp(-newθ[2]))
-    newθ
+function trans(θ, lim)
+    log.(θ ./ (lim .- θ))
+end
+
+function invtrans(x, lim)
+    lim ./ (1 .+ exp.(-x))
+end
+
+function proposal(d, cov)
+   Distributions.MvNormal(zeros(Float64, d), cov)
+end
+
+function estimatecov(d, track, cov, i, lim)
+    est = StatsBase.cov(eachcol(broadcast(trans, track[1:d, 1:(i - 1)], lim)))
+    (1 - 0.05) ^ 2 .* 2.38 ^ 2 .* est ./ d .+ 0.05 ^ 2 .* cov
 end
 
 function freqs!(all, nbin, nN, counts, J, G, inter)
@@ -68,23 +78,38 @@ function freqs!(all, nbin, nN, counts, J, G, inter)
     counts .= log.((counts .+ 0.1) / (J * G / inter + 0.1 * nbin))
 end
 
-function mcmcbody!(i, proposal,
-                θ, λ, ϕ,
+function mcmcbody!(i,
+                θ, λ, π, d, cov,
                 all, J, G, inter, nN, len, t, μ,
                 nbin, conds, counts, slimmed,
-                Idat, fac,
+                Idat, fac, lim, ϵ,
                 loglik, track, rate, M)
+
+    println(θ)
+    if i <= 2d
+        propdistr = proposal(d, cov)
+    else
+        propdistr = proposal(d, estimatecov(d, track, cov, i, lim))
+    end
+
     if (i > 1)
-        newθ = propose(θ, proposal)
+        newθ = invtrans(trans(θ, lim) .+ Distributions.rand(propdistr), lim)
     else newθ = θ
     end
-    β = newθ[1] * (1 + λ * (1 + ϕ * (1 - newθ[2])))
-    replication!(all, J, G, inter, nN, len, t, β, newθ[2], ϕ, μ, λ)
+
+    # β = newθ[1] * (1 + newθ[2] + λ * (1 + newθ[3] * (1 - π)))
+    β = newθ[1] * (1 + λ)
+
+    # replication!(all, J, G, inter, nN, len, t, β, π, newθ[3], μ, λ, newθ[2])
+    replication!(all, J, G, inter, nN, len, t, β, π, 0, μ, λ, 0)
     freqs!(all, nbin, nN, counts, J, G, inter)
+    
     slimmed .= counts[:, conds]
     newloglik = sum(slimmed .* Idat) + fac
     if rand() < min(exp(newloglik - loglik), 1) 
         θ = newθ
+        θ[θ .>= lim] .= (lim .- ϵ)[θ .>= lim]
+        θ[θ .<= 0] .= ϵ
         loglik = newloglik
         rate += 1 / M
     end
@@ -104,6 +129,8 @@ function cmedat(dat, idx, nbin)
     μ = StatsBase.mean(slimdat[:, 1])
     σ2 = StatsBase.var(slimdat[:, 1])
     λ = σ2 / μ - 1
+    π = StatsBase.mean(slimdat[:, 2]) / μ
+
     p = μ / σ2
     r = μ * p / (1 - p)
     if λ > 0 law = Distributions.NegativeBinomial(r, p)
@@ -116,17 +143,15 @@ function cmedat(dat, idx, nbin)
     fac = convert(Float64, sum(log.(factorial.(big.(sum(eachrow(Idat))))) .- sum(eachrow(log.(factorial.(big.(Idat)))))))
     fac = fac + sum(log.(Distributions.pdf(law, conds)))
 
-    (nN, conds, ncond, μ, λ, Idat, fac)
+    (nN, conds, ncond, μ, λ, π, Idat, fac)
 end
 
-function loopmcmc!(proposal,
-                    θ, ϕ,
-                    J, G, inter, len,
-                    nbin,
+function loopmcmc!(θ, J, G, inter, len,
+                    nbin, d, cov, lim, ϵ,
                     loglik, track, rate, M,
                     idx, dat)
 
-    nN, conds, ncond, μ, λ, Idat, fac = cmedat(dat, idx, nbin)
+    nN, conds, ncond, μ, λ, π, Idat, fac = cmedat(dat, idx, nbin)
 
     counts = zeros(Float64, nbin, nN)
     slimmed = zeros(Float64, nbin, ncond)
@@ -135,17 +160,14 @@ function loopmcmc!(proposal,
 
     for i in 1:M
         println("$idx, $i")
-        (θ, loglik, rate) = mcmcbody!(i, proposal,
-                    θ, λ, ϕ,
+        (θ, loglik, rate) = mcmcbody!(i,
+                    θ, λ, π, d, cov,
                     all, J, G, inter, nN, len, t, μ,
                     nbin, conds, counts, slimmed,
-                    Idat, fac,
+                    Idat, fac, lim, ϵ,
                     loglik, track, rate, M)
     end
-end
-
-function rw!(input, idx)
-    input .= DelimitedFiles.readdlm("results/fit_$idx.csv", ',')
+    rate
 end
 
 end
