@@ -148,10 +148,12 @@ end
 
 function loopmcmc!(θ, J, G, inter, len,
                     nbin, d, cov, lim, ϵ,
-                    loglik, track, rate, M,
+                    loglik, track, M,
                     idx, dat)
 
     nN, conds, ncond, μ, λ, π, Idat, fac = cmedat(dat, idx, nbin)
+
+    rate = 0
 
     counts = zeros(Float64, nbin, nN)
     slimmed = zeros(Float64, nbin, ncond)

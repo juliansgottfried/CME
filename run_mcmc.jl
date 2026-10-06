@@ -21,7 +21,6 @@ addprocs(SlurmManager())
 @everywhere M = 6000
 
 @everywhere loglik = -Inf
-@everywhere rate = 0
 
 @everywhere d = 1
 @everywhere cov = 0.01 ^ 2 .* LinearAlgebra.I(d) ./ d
@@ -34,6 +33,6 @@ pmap(1:ncme) do idx
     track = zeros(Float64, d + 1, M)
     rate = Sim.loopmcmc!(θ, J, G, inter, len,
             nbin, d, cov, lim, ϵ, loglik, track, 
-            rate, M, idx, dat)
+            M, idx, dat)
     DelimitedFiles.writedlm("/scratch/users/jgottf/CME/results/fit_$(idx).csv", track, ',')
 end
