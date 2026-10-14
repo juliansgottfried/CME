@@ -53,18 +53,12 @@ p_1_1(x, z, K, m, xbar, R0, η, π) = @. K * x * z * (m * (1 - xbar) + (1 - m) *
     p_10(x, z, K, m, xbar, R0, η, π) * Δx_10(K) * Δz_10(x, z, K) +
     p_1_1(x, z, K, m, xbar, R0, η, π) * Δx_1_1(K) * Δz_1_1(x, z, K)
 
-function f!(du, u, p, t)
-    S, K, m, xbar, R0, η, π = values(p)
-
+function loadxz(u, S)
     v = 1 ./ (1 .+ exp.(-u))
+    (v[1:2:2S], v[2:2:2S])
+end
 
-    x = v[1:2:2S]
-    z = v[2:2:2S]
-
-    sxx = σxx(x, z, K, m, xbar, R0, η, π) .^2
-    szz = σzz(x, z, K, m, xbar, R0, η, π) .^2
-    sxz = σxz(x, z, K, m, xbar, R0, η, π) .^2
-
+function muop!(du, S,K, m, xbar, R0, η, π, x, z, sxx, szz, sxz)
     diag_ssT_x = sxx + sxz
     diag_ssT_z = sxz + szz
 
@@ -72,22 +66,36 @@ function f!(du, u, p, t)
     du[2:2:2S] .= @. (1 / (z * (1 - z))) * (μz(x, z, K, m, xbar, R0, η, π) + ((2z - 1) / (2z * (1 - z))) * diag_ssT_z)
 end
 
-function g!(du, u, p, t)
+function f!(du, u, p, t)
     S, K, m, xbar, R0, η, π = values(p)
 
-    v = 1 ./ (1 .+ exp.(-u))
+    x, z = loadxz(u, S)
 
-    x = v[1:2:2S]
-    z = v[2:2:2S]
+    sxx = σxx(x, z, K, m, xbar, R0, η, π) .^2
+    szz = σzz(x, z, K, m, xbar, R0, η, π) .^2
+    sxz = σxz(x, z, K, m, xbar, R0, η, π) .^2
 
-    sxx = σxx(x, z, K, m, xbar, R0, η, π)
-    szz = σzz(x, z, K, m, xbar, R0, η, π)
-    sxz = σxz(x, z, K, m, xbar, R0, η, π)
+    muop!(du, S,K, m, xbar, R0, η, π, x, z, sxx, szz, sxz)
+end
+
+function sigmaloop!(du, S, x, z, sxx, szz, sxz)
     for i in 1:S
         idx = 2(i - 1)
         du[idx .+ (1:2), idx + 1] .= @. [sxx[i] / (x[i] * (1 - x[i])); sxz[i] / (z[i] * (1 - z[i]))]
         du[idx .+ (1:2), idx + 2] .= @. [sxz[i] / (x[i] * (1 - x[i])); szz[i] / (z[i] * (1 - z[i]))]
     end
+end
+
+function g!(du, u, p, t)
+    S, K, m, xbar, R0, η, π = values(p)
+
+    x, z = loadxz(u, S)
+
+    sxx = σxx(x, z, K, m, xbar, R0, η, π)
+    szz = σzz(x, z, K, m, xbar, R0, η, π)
+    sxz = σxz(x, z, K, m, xbar, R0, η, π)
+
+    sigmaloop!(du, S, x, z, sxx, szz, sxz)
 end
 
 function setA(S)
