@@ -2,12 +2,12 @@ import StochasticDiffEq as SDE
 import SparseArrays
 import Plots
 
-p11(x, z, K, m, xbar, R0, η, π) = @. (1 - x) * (1 - η) * (m * xbar * π + (1 - m) * x * z)
-p10(x, z, K, m, xbar, R0, η, π) = @. (1 - x) * (m * xbar * (1 - π * (1 - η)) + (1 - m) * (x - x * z * (1 - η)))
-p01(x, z, K, m, xbar, R0, η, π) = @. (x - x * z) * (1 - η) * (m * xbar * π + (1 - m) * x * z) + R0 * K * x * z * (x - x * z)
-p0_1(x, z, K, m, xbar, R0, η, π) = @. x * z * (m * xbar * (1 - π * (1 - η)) + (1 - m) * (x - x * z * (1 - η)))
-p_10(x, z, K, m, xbar, R0, η, π) = @. (x - x * z) * (m * (1 - xbar) + (1 - m) * (1 - x))
-p_1_1(x, z, K, m, xbar, R0, η, π) = @. x * z * (m * (1 - xbar) + (1 - m) * (1 - x))
+p11(x, z, K, m, xbar, R0, η, π) = @. K * (1 - x) * (1 - η) * (m * xbar * π + (1 - m) * x * z)
+p10(x, z, K, m, xbar, R0, η, π) = @. K * (1 - x) * (m * xbar * (1 - π * (1 - η)) + (1 - m) * (x - x * z * (1 - η)))
+p01(x, z, K, m, xbar, R0, η, π) = @. K * (x - x * z) * (1 - η) * (m * xbar * π + (1 - m) * x * z) + R0 * K * x * z * (x - x * z)
+p0_1(x, z, K, m, xbar, R0, η, π) = @. K * x * z * (m * xbar * (1 - π * (1 - η)) + (1 - m) * (x - x * z * (1 - η)))
+p_10(x, z, K, m, xbar, R0, η, π) = @. K * (x - x * z) * (m * (1 - xbar) + (1 - m) * (1 - x))
+p_1_1(x, z, K, m, xbar, R0, η, π) = @. K * x * z * (m * (1 - xbar) + (1 - m) * (1 - x))
 
 Δx11(K) = 1 / K
 Δx10(K) = 1 / K
@@ -105,24 +105,24 @@ end
 S = 100
 
 K = 10 ^ 5
-m = 10 ^ -8
+m = 0.2
 
 xbar = exp.((1:S) ./ S)
 xbar .= xbar ./ sum(xbar)
-R0 = 0.0001
-η = 0.5
-π = 0.001
+R0 = 1
+η = 0.25
+π = 0.01
 p = (S, K, m, xbar, R0, η, π)
 
 x0 = xbar
-x0 = ones(Float64, S) / S
 y0 = ones(Float64, S) / K
 z0 = y0 ./ x0
 v0 = [x0 z0]'[:]
 u0 = log.(v0 ./ (1 .- v0))
 
-prob = SDE.SDEProblem(f!, g!, u0, (0.0, 100000.0), p, noise_rate_prototype = setA(S))
+prob = SDE.SDEProblem(f!, g!, u0, (0.0, 1000.0), p, noise_rate_prototype = setA(S))
 sol = SDE.solve(prob, SDE.SRA1())
+# sol = SDE.solve(prob, SDE.SOSRA())
 outu = reduce(hcat, [sol.u[i] for i in eachindex(sol.t)])'
 outv = 1 ./ (1 .+ exp.(-outu))
 outx = outv[:, 1:2:2S]
