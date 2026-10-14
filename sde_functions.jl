@@ -1,6 +1,4 @@
-import StochasticDiffEq as SDE
-import SparseArrays
-import Plots
+module helper
 
 p11(x, z, K, m, xbar, R0, η, π) = @. K * (1 - x) * (1 - η) * (m * xbar * π + (1 - m) * x * z)
 p10(x, z, K, m, xbar, R0, η, π) = @. K * (1 - x) * (m * xbar * (1 - π * (1 - η)) + (1 - m) * (x - x * z * (1 - η)))
@@ -63,14 +61,15 @@ function f!(du, u, p, t)
     x = v[1:2:2S]
     z = v[2:2:2S]
 
-    s11 = σxx(x, z, K, m, xbar, R0, η, π) .^2
-    s22 = σyy(x, z, K, m, xbar, R0, η, π) .^2
-    s12 = σxy(x, z, K, m, xbar, R0, η, π) .^2
-    dsstx = [s11[i] + s12[i] for i in 1:S]
-    dsstz = [s12[i] + s22[i] for i in 1:S]
+    sxx = σxx(x, z, K, m, xbar, R0, η, π) .^2
+    szz = σzz(x, z, K, m, xbar, R0, η, π) .^2
+    sxz = σxz(x, z, K, m, xbar, R0, η, π) .^2
 
-    du[1:2:2S] .= @. (1 / (x * (1 - x))) * (μx(x, z, K, m, xbar, R0, η, π) + ((2x - 1) / (2x * (1 - x))) * dsstx)
-    du[2:2:2S] .= @. (1 / (z * (1 - z))) * (μz(x, z, K, m, xbar, R0, η, π) + ((2z - 1) / (2z * (1 - z))) * dsstz)
+    diag_ssT_x = sxx + sxz
+    diag_ssT_z = sxz + szz
+
+    du[1:2:2S] .= @. (1 / (x * (1 - x))) * (μx(x, z, K, m, xbar, R0, η, π) + ((2x - 1) / (2x * (1 - x))) * diag_ssT_x)
+    du[2:2:2S] .= @. (1 / (z * (1 - z))) * (μz(x, z, K, m, xbar, R0, η, π) + ((2z - 1) / (2z * (1 - z))) * diag_ssT_z)
 end
 
 function g!(du, u, p, t)
@@ -81,15 +80,13 @@ function g!(du, u, p, t)
     x = v[1:2:2S]
     z = v[2:2:2S]
 
-    s11 = σxx(x, z, K, m, xbar, R0, η, π)
-    s22 = σzz(x, z, K, m, xbar, R0, η, π)
-    s12 = σxz(x, z, K, m, xbar, R0, η, π)
+    sxx = σxx(x, z, K, m, xbar, R0, η, π)
+    szz = σzz(x, z, K, m, xbar, R0, η, π)
+    sxz = σxz(x, z, K, m, xbar, R0, η, π)
     for i in 1:S
         idx = 2(i - 1)
-        du[idx + 1, idx + 1] = @. s11[i] / (x[i] * (1 - x[i]))
-        du[idx + 1, idx + 2] = @. s12[i] / (x[i] * (1 - x[i]))
-        du[idx + 2, idx + 1] = @. s12[i] / (z[i] * (1 - z[i]))
-        du[idx + 2, idx + 2] = @. s22[i] / (z[i] * (1 - z[i]))
+        du[idx .+ (1:2), idx + 1] .= @. [sxx[i] / (x[i] * (1 - x[i])); sxz[i] / (z[i] * (1 - z[i]))]
+        du[idx .+ (1:2), idx + 2] .= @. [sxz[i] / (x[i] * (1 - x[i])); szz[i] / (z[i] * (1 - z[i]))]
     end
 end
 
@@ -99,38 +96,24 @@ function setA(S)
         idx = 2(i - 1)
         A[idx .+ (1:2), idx .+ (1:2)] .= 1
     end
-    SparseArrays.sparse(A)
+    A
 end
 
-S = 100
+function fakexbar(S)
+    xbar = exp.((1:S) ./ S)
+    xbar ./ sum(xbar)
+end
 
-K = 10 ^ 5
-m = 0.2
+function makeu0(x0, y0)
+    z0 = y0 ./ x0
+    v0 = [x0 z0]'[:]
+    log.(v0 ./ (1 .- v0))
+end
 
-xbar = exp.((1:S) ./ S)
-xbar .= xbar ./ sum(xbar)
-R0 = 1
-η = 0.25
-π = 0.01
-p = (S, K, m, xbar, R0, η, π)
+function getsol(sol, S)
+    outu = reduce(hcat, [sol.u[i] for i in eachindex(sol.t)])'
+    outv = 1 ./ (1 .+ exp.(-outu))
+    (outv[:, 1:2:2S], outv[:, 2:2:2S])
+end
 
-x0 = xbar
-y0 = ones(Float64, S) / K
-z0 = y0 ./ x0
-v0 = [x0 z0]'[:]
-u0 = log.(v0 ./ (1 .- v0))
-
-prob = SDE.SDEProblem(f!, g!, u0, (0.0, 1000.0), p, noise_rate_prototype = setA(S))
-sol = SDE.solve(prob, SDE.SRA1())
-# sol = SDE.solve(prob, SDE.SOSRA())
-outu = reduce(hcat, [sol.u[i] for i in eachindex(sol.t)])'
-outv = 1 ./ (1 .+ exp.(-outu))
-outx = outv[:, 1:2:2S]
-outz = outv[:, 2:2:2S]
-
-Plots.plot(sol.t, outx,
-    color = :black, label = false)
-Plots.plot(sol.t, outz,
-    color = :black, label = false)
-Plots.plot(sol.t, outz .* outx,
-    color = :black, label = false)
+end
