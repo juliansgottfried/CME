@@ -692,7 +692,7 @@ fits %>%
 ## Species density distribution
 ```{r}
 hostdat %>%
-    group_by(aid, species) %>% summarize(n=n()) %>% 
+    group_by(aid, species) %>% summarize(n = n()) %>% 
     mutate(p = n / n()) %>% ungroup %>% arrange(-p) %>% 
     mutate(p = n() * p / sum(p)) %>% mutate(sp = row_number()) %>% 
     mutate(sim = sort(

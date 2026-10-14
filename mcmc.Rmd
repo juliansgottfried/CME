@@ -159,3 +159,44 @@ plotter %>%
           legend.position = "bottom",
           legend.title = element_text(vjust = 0.75))
 ```
+
+```{r}
+taxon <- "species"
+taxavec <- unname(unlist(unique(hostdat[taxon])))
+aidvec <- unique(hostdat$aid)
+detection <- data.frame(aid = rep(aidvec, each = length(taxavec)), 
+                        taxa = rep(taxavec, times = length(aidvec)),
+                        d = 0)
+for (i in 1:nrow(hostdat)) {
+    detection$d[detection$taxa == hostdat[taxon][i, 1] & 
+                    detection$aid == hostdat$aid[i]] <- 1
+}
+detection <- left_join(detection, 
+                       detection %>% group_by(taxa) %>% 
+                           summarize(n = sum(d)) %>% arrange(-n) %>%
+                           mutate(taxa_idx = row_number()) %>%
+                           select(taxa, taxa_idx),
+                       by = "taxa")
+detection <- left_join(detection, 
+                       detection %>% group_by(aid) %>% 
+                           summarize(n = sum(d)) %>% arrange(n) %>%
+                           mutate(aid_idx = row_number()) %>% 
+                           select(aid, aid_idx),
+                       by = "aid")
+detection %>% arrange() %>% 
+    ggplot(aes(x = taxa_idx, y = aid_idx, fill = as.factor(d))) +
+    geom_tile() +
+    labs(x = taxon, y = "subject") +
+    scale_fill_manual(values = c("black", "white")) +
+    guides(fill = "none") +
+    theme_classic() +
+    theme(text = element_text(size = 12, family = "mono"),
+          axis.text.x = element_blank(), axis.ticks.x = element_blank(),
+          axis.text.y = element_blank(), axis.ticks.y = element_blank())
+
+hist(rbeta(10000, 2, 2), breaks = 100)
+hist(rbeta(10000, 1.5, 20 - 1.5), breaks = 100)
+
+alpha1 <- 0.1
+plot(colSums(DirichletReg::rdirichlet(1000, rep(alpha1, length(taxavec)))) / 1000)
+```
