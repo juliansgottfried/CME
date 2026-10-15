@@ -24,7 +24,6 @@ prob = SDE.SDEProblem(helper.f!, helper.g!,
     noise_rate_prototype = helper.setA(S))
 
 sol = SDE.solve(prob, SDE.SRA1())
-# sol = SDE.solve(prob, SDE.SOSRA())
 
 outx, outz = helper.getsol(sol, S)
 
@@ -32,5 +31,5 @@ Plots.plot(sol.t, outx,
     color = :black, label = false)
 Plots.plot(sol.t, outz,
     color = :black, label = false)
-Plots.plot(sol.t, outz .* outx,
+Plots.plot(sol.t, (outz .* outx),
     color = :black, label = false)
