@@ -27,14 +27,14 @@ sol = SDE.solve(prob, SDE.ImplicitEM(autodiff = SDE.AutoFiniteDiff()))
 outx, outz = helper.getsol(sol, S)
 timeidx = helper.gettime(sol)
 
-# Plots.plot(sol.t[timeidx], outx[timeidx, :],
-#     color = :black, label = false)
+Plots.plot(sol.t[timeidx], outx[timeidx, :],
+    color = :black, label = false)
 Plots.plot(sol.t[timeidx], outz[timeidx, :],
    color = :black, label = false)
-# Plots.plot(sol.t[timeidx], (outx .* outz)[timeidx, :],
-#     color = :black, label = false)
+Plots.plot(sol.t[timeidx], (outx .* outz)[timeidx, :],
+    color = :black, label = false)
 
-#= 
+#=
 xbar = 0.05
 ubar = log(xbar / (1 - xbar))
 K = 10^6
