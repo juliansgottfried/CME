@@ -2,7 +2,9 @@ module helper
 
 p11(x, z, K, m, xbar, R0, η, π) = @. K * (1 - x) * (1 - η) * (m * xbar * π + (1 - m) * x * z)
 p10(x, z, K, m, xbar, R0, η, π) = @. K * (1 - x) * (m * xbar * (1 - π * (1 - η)) + (1 - m) * (x - x * z * (1 - η)))
-p01(x, z, K, m, xbar, R0, η, π) = @. K * (x - x * z) * (1 - η) * (m * xbar * π + (1 - m) * x * z) + R0 * K * x * z * (x - x * z)
+p01non(x, z, K, m, xbar, R0, η, π) = @. K * (x - x * z) * (1 - η) * (m * xbar * π + (1 - m) * x * z)
+p01stiff(x, z, K, m, xbar, R0, η, π) = @. R0 * K^2 * x * z * (x - x * z)
+p01(x, z, K, m, xbar, R0, η, π) = @. p01non(x, z, K, m, xbar, R0, η, π) + p01stiff(x, z, K, m, xbar, R0, η, π)
 p0_1(x, z, K, m, xbar, R0, η, π) = @. K * x * z * (m * xbar * (1 - π * (1 - η)) + (1 - m) * (x - x * z * (1 - η)))
 p_10(x, z, K, m, xbar, R0, η, π) = @. K * (x - x * z) * (m * (1 - xbar) + (1 - m) * (1 - x))
 p_1_1(x, z, K, m, xbar, R0, η, π) = @. K * x * z * (m * (1 - xbar) + (1 - m) * (1 - x))
@@ -27,12 +29,13 @@ p_1_1(x, z, K, m, xbar, R0, η, π) = @. K * x * z * (m * (1 - xbar) + (1 - m) *
     p0_1(x, z, K, m, xbar, R0, η, π) * Δx0_1(K) +
     p_10(x, z, K, m, xbar, R0, η, π) * Δx_10(K) +
     p_1_1(x, z, K, m, xbar, R0, η, π) * Δx_1_1(K)
-μz(x, z, K, m, xbar, R0, η, π) = @. p11(x, z, K, m, xbar, R0, η, π) * Δz11(x, z, K) +
+μz_non(x, z, K, m, xbar, R0, η, π) = @. p11(x, z, K, m, xbar, R0, η, π) * Δz11(x, z, K) +
     p10(x, z, K, m, xbar, R0, η, π) * Δz10(x, z, K) +
-    p01(x, z, K, m, xbar, R0, η, π) * Δz01(x, z, K) +
+    p01non(x, z, K, m, xbar, R0, η, π) * Δz01(x, z, K) +
     p0_1(x, z, K, m, xbar, R0, η, π) * Δz0_1(x, z, K) +
     p_10(x, z, K, m, xbar, R0, η, π) * Δz_10(x, z, K) +
     p_1_1(x, z, K, m, xbar, R0, η, π) * Δz_1_1(x, z, K)
+μz_stiff(x, z, K, m, xbar, R0, η, π) = @. p01stiff(x, z, K, m, xbar, R0, η, π) * Δz01(x, z, K)
 
 σxx(x, z, K, m, xbar, R0, η, π) = @. p11(x, z, K, m, xbar, R0, η, π) * Δx11(K)^2 +
     p10(x, z, K, m, xbar, R0, η, π) * Δx10(K)^2 +
@@ -58,15 +61,15 @@ function loadxz(u, S)
     (v[1:2:2S], v[2:2:2S])
 end
 
-function muop!(du, S,K, m, xbar, R0, η, π, x, z, sxx, szz, sxz)
+function muop_non!(du, S,K, m, xbar, R0, η, π, x, z, sxx, szz, sxz)
     diag_ssT_x = sxx + sxz
     diag_ssT_z = sxz + szz
 
     du[1:2:2S] .= @. (1 / (x * (1 - x))) * (μx(x, z, K, m, xbar, R0, η, π) + ((2x - 1) / (2x * (1 - x))) * diag_ssT_x)
-    du[2:2:2S] .= @. (1 / (z * (1 - z))) * (μz(x, z, K, m, xbar, R0, η, π) + ((2z - 1) / (2z * (1 - z))) * diag_ssT_z)
+    du[2:2:2S] .= @. (1 / (z * (1 - z))) * (μz_non(x, z, K, m, xbar, R0, η, π) + ((2z - 1) / (2z * (1 - z))) * diag_ssT_z)
 end
 
-function f!(du, u, p, t)
+function f_non!(du, u, p, t)
     S, K, m, xbar, R0, η, π = values(p)
 
     x, z = loadxz(u, S)
@@ -75,7 +78,29 @@ function f!(du, u, p, t)
     szz = σzz(x, z, K, m, xbar, R0, η, π) .^2
     sxz = σxz(x, z, K, m, xbar, R0, η, π) .^2
 
-    muop!(du, S,K, m, xbar, R0, η, π, x, z, sxx, szz, sxz)
+    muop_non!(du, S,K, m, xbar, R0, η, π, x, z, sxx, szz, sxz)
+end
+
+function muop_stiff!(du, S,K, m, xbar, R0, η, π, x, z, szz, sxz)
+    diag_ssT_z = sxz + szz
+
+    du[1:2:2S] .= 0
+    du[2:2:2S] .= @. (1 / (z * (1 - z))) * (μz_stiff(x, z, K, m, xbar, R0, η, π) + ((2z - 1) / (2z * (1 - z))) * diag_ssT_z)
+end
+
+function f_stiff!(du, u, p, t)
+    S, K, m, xbar, R0, η, π = values(p)
+
+    x, z = loadxz(u, S)
+
+    szz = σzz(x, z, K, m, xbar, R0, η, π) .^2
+    sxz = σxz(x, z, K, m, xbar, R0, η, π) .^2
+
+    muop_stiff!(du, S,K, m, xbar, R0, η, π, x, z, szz, sxz)
+end
+
+function f!(du, u, p, t)
+    f_non!(du, u, p, t) .+ f_stiff!(du, u, p, t)
 end
 
 function sigmaloop!(du, S, x, z, sxx, szz, sxz)
@@ -108,8 +133,8 @@ function setA(S)
 end
 
 function fakexbar(S)
-    xbar = exp.((1:S) ./ S)
-    xbar ./ sum(xbar)
+    xbar = exp.(10(1:S) / S)
+    xbar ./ 10sum(xbar)
 end
 
 function makeu0(x0, y0)
@@ -122,6 +147,12 @@ function getsol(sol, S)
     outu = reduce(hcat, [sol.u[i] for i in eachindex(sol.t)])'
     outv = 1 ./ (1 .+ exp.(-outu))
     (outv[:, 1:2:2S], outv[:, 2:2:2S])
+end
+
+function gettime(sol)
+    T = size(sol.t)[1]
+    stepper = div(T, 1000) == 0 ? 1 : div(T, 1000)
+    1:stepper:T
 end
 
 end
