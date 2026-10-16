@@ -19,13 +19,6 @@ x0 = xbar
 y0 = ones(Float64, S) * minimum(xbar) / 10
 u0 = helper.makeu0(x0, y0)
 
-# prob = SDE.SDEProblem(helper.f!, helper.g!, 
-#     u0, (0.0, 1000.0), p, noise_rate_prototype = helper.setA(S))
-# sol = SDE.solve(prob, SDE.SOSRA())
-# sol = SDE.solve(prob, SDE.SRA1())
-# sol = SDE.solve(prob, SDE.LambaEM())
-# sol = SDE.solve(prob, SDE.LambaEulerHeun())
-
 prob = SDE.SplitSDEProblem(helper.f_stiff!, helper.f_non!, helper.g!,
     u0, (0.0, 1000.0), p, noise_rate_prototype = helper.setA(S))
 # sol = SDE.solve(prob, SDE.SKenCarp(autodiff = SDE.AutoFiniteDiff()))
@@ -41,3 +34,20 @@ Plots.plot(sol.t[timeidx], outz[timeidx, :],
 # Plots.plot(sol.t[timeidx], (outx .* outz)[timeidx, :],
 #     color = :black, label = false)
 
+#= 
+xbar = 0.05
+ubar = log(xbar / (1 - xbar))
+K = 10^6
+m = 10K^-1
+prob = SDE.SDEProblem(helper.testf2, helper.testg2,
+    ubar, (0.0, 100000000000.0), (K, m, xbar), noise_rate_prototype = 1.0)
+sol = SDE.solve(prob, SDE.SRA1())
+timeidx = helper.gettime(sol)
+outx = 1 ./ (1 .+ exp.(-sol.u))
+Plots.plot(sol.t[timeidx], outx[timeidx],
+    color = :black, label = false)
+xbar
+StatsBase.mean(outx)
+xbar * (1 - xbar) / (K * m + 1)
+StatsBase.var(outx)
+=#

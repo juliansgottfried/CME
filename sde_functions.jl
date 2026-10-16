@@ -23,12 +23,13 @@ p_1_1(x, z, K, m, xbar, R0, η, π) = @. K * x * z * (m * (1 - xbar) + (1 - m) *
 Δz_10(x, z, K) = @. (x * z) / (x * (K * x - 1))
 Δz_1_1(x, z, K) = @. (x * z - x) / (x * (K * x - 1))
 
-μx(x, z, K, m, xbar, R0, η, π) = @. p11(x, z, K, m, xbar, R0, η, π) * Δx11(K) +
+#= μx(x, z, K, m, xbar, R0, η, π) = @. p11(x, z, K, m, xbar, R0, η, π) * Δx11(K) +
     p10(x, z, K, m, xbar, R0, η, π) * Δx10(K) +
     p01(x, z, K, m, xbar, R0, η, π) * Δx01(K) +
     p0_1(x, z, K, m, xbar, R0, η, π) * Δx0_1(K) +
     p_10(x, z, K, m, xbar, R0, η, π) * Δx_10(K) +
-    p_1_1(x, z, K, m, xbar, R0, η, π) * Δx_1_1(K)
+    p_1_1(x, z, K, m, xbar, R0, η, π) * Δx_1_1(K) =#
+μx(x, z, K, m, xbar, R0, η, π) = @. m * (xbar - x)
 μz_non(x, z, K, m, xbar, R0, η, π) = @. p11(x, z, K, m, xbar, R0, η, π) * Δz11(x, z, K) +
     p10(x, z, K, m, xbar, R0, η, π) * Δz10(x, z, K) +
     p01non(x, z, K, m, xbar, R0, η, π) * Δz01(x, z, K) +
@@ -37,12 +38,13 @@ p_1_1(x, z, K, m, xbar, R0, η, π) = @. K * x * z * (m * (1 - xbar) + (1 - m) *
     p_1_1(x, z, K, m, xbar, R0, η, π) * Δz_1_1(x, z, K)
 μz_stiff(x, z, K, m, xbar, R0, η, π) = @. p01stiff(x, z, K, m, xbar, R0, η, π) * Δz01(x, z, K)
 
-σxx(x, z, K, m, xbar, R0, η, π) = @. p11(x, z, K, m, xbar, R0, η, π) * Δx11(K)^2 +
+#= σxx(x, z, K, m, xbar, R0, η, π) = @. p11(x, z, K, m, xbar, R0, η, π) * Δx11(K)^2 +
     p10(x, z, K, m, xbar, R0, η, π) * Δx10(K)^2 +
     p01(x, z, K, m, xbar, R0, η, π) * Δx01(K)^2 +
     p0_1(x, z, K, m, xbar, R0, η, π) * Δx0_1(K)^2 +
     p_10(x, z, K, m, xbar, R0, η, π) * Δx_10(K)^2 +
-    p_1_1(x, z, K, m, xbar, R0, η, π) * Δx_1_1(K)^2
+    p_1_1(x, z, K, m, xbar, R0, η, π) * Δx_1_1(K)^2 =#
+σxx(x, z, K, m, xbar, R0, η, π) = @. 2x * (1 - x) / K
 σzz(x, z, K, m, xbar, R0, η, π) = @. p11(x, z, K, m, xbar, R0, η, π) * Δz11(x, z, K)^2 +
     p10(x, z, K, m, xbar, R0, η, π) * Δz10(x, z, K)^2 +
     p01(x, z, K, m, xbar, R0, η, π) * Δz01(x, z, K)^2 +
@@ -101,6 +103,28 @@ end
 
 function f!(du, u, p, t)
     f_non!(du, u, p, t) .+ f_stiff!(du, u, p, t)
+end
+
+function testf(u, p, t)
+    K, m, xbar = values(p)
+    m * (xbar - u)
+end
+
+function testf2(u, p, t)
+    K, m, xbar = values(p)
+    v = 1 / (1 + exp(-u))
+    (1 / (v * (1 - v))) * (m * (xbar - v) + ((2v - 1) / (2v * (1 - v))) * (2v * (1 - v) / K)^2)
+end
+
+function testg(u, p, t)
+    K, m, xbar = values(p)
+    2u * (1 - u) / K
+end
+
+function testg2(u, p, t)
+    K, m, xbar = values(p)
+    v = 1 / (1 + exp(-u))
+    (1 / (v * (1 - v))) * (2v * (1 - v) / K)
 end
 
 function sigmaloop!(du, S, x, z, sxx, szz, sxz)
