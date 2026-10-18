@@ -1,13 +1,9 @@
-# make code such that we can choose y or z
-# we can choose untransformed or transformed
-# and we can choose to have a stiff part or not
-
 include("sde_functions.jl")
 
 import StochasticDiffEq as SDE
 import Plots
 
-S = 10
+S = 5
 
 K = 10^6
 m = 10K^-1
@@ -17,34 +13,31 @@ R0 = 0
 η = 0.5
 π = 0.01
 
-p = (S, K, m, xbar, R0, η, π)
+isy = true
+
+p = (S, K, m, xbar, R0, η, π, isy)
 
 x0 = xbar
 y0 = ones(Float64, S) * minimum(xbar) / 10
-u0 = helper.makeu0(x0, y0)
-
-# prob = SDE.SplitSDEProblem(helper.f_stiff!, helper.f_non!, helper.g!,
-#     u0, (0.0, 1000.0), p, noise_rate_prototype = helper.setA(S))
-# sol = SDE.solve(prob, SDE.ImplicitEM(autodiff = SDE.AutoFiniteDiff()))
-# sol = SDE.solve(prob, SDE.SKenCarp(autodiff = SDE.AutoFiniteDiff()))
-
-prob = SDE.SDEProblem(helper.f_xy!, helper.g_xy!,
-    u0, (0.0, 100000.0), p, noise_rate_prototype = helper.setA(S))
-sol = SDE.solve(prob, SDE.SOSRA())
+u0 = helper.makeu0(x0, y0, isy)
 
 prob = SDE.SDEProblem(helper.f!, helper.g!,
     u0, (0.0, 100000.0), p, noise_rate_prototype = helper.setA(S))
-sol = SDE.solve(prob, SDE.SRA1(), reltol = 1 // 2^12)
+sol = SDE.solve(prob, SDE.SOSRA())
+# sol = SDE.solve(prob, SDE.SRA1())
 
-outx, outy = helper.getsol(sol, S)
+# prob = SDE.SplitSDEProblem(helper.f_stiff!, helper.f_non!, helper.g!,
+#     u0, (0.0, 100000.0), p, noise_rate_prototype = helper.setA(S))
+# sol = SDE.solve(prob, SDE.ImplicitEM(autodiff = SDE.AutoFiniteDiff()))
+# sol = SDE.solve(prob, SDE.SKenCarp(autodiff = SDE.AutoFiniteDiff()))
+
+outx, outyorz = helper.getsol(sol, S)
 timeidx = helper.gettime(sol)
 
 Plots.plot(sol.t[timeidx], outx[timeidx, :],
     color = :black, label = false)
-Plots.plot(sol.t[timeidx], outy[timeidx, :],
+Plots.plot(sol.t[timeidx], outyorz[timeidx, :],
    color = :black, label = false)
-Plots.plot(sol.t[timeidx], (outy ./ outx)[timeidx, :],
-    color = :black, label = false)
 
 #=
 xbar = 0.1
