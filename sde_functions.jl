@@ -105,23 +105,23 @@ function f!(du, u, p, t)
     f_non!(du, u, p, t) .+ f_stiff!(du, u, p, t)
 end
 
-function testf(u, p, t)
+function testf_untrans(u, p, t)
     K, m, xbar = values(p)
     m * (xbar - u)
 end
 
-function testf2(u, p, t)
+function testf(u, p, t)
     K, m, xbar = values(p)
     v = 1 / (1 + exp(-u))
     (1 / (v * (1 - v))) * (m * (xbar - v) + ((2v - 1) / (2v * (1 - v))) * (2v * (1 - v) / K)^2)
 end
 
-function testg(u, p, t)
+function testg_untrans(u, p, t)
     K, m, xbar = values(p)
     2u * (1 - u) / K
 end
 
-function testg2(u, p, t)
+function testg(u, p, t)
     K, m, xbar = values(p)
     v = 1 / (1 + exp(-u))
     (1 / (v * (1 - v))) * (2v * (1 - v) / K)

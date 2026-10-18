@@ -34,20 +34,20 @@ Plots.plot(sol.t[timeidx], outz[timeidx, S],
 Plots.plot(sol.t[timeidx], (outx .* outz)[timeidx, S],
     color = :black, label = false)
 
-#=
-xbar = 0.05
-ubar = log(xbar / (1 - xbar))
+
+xbar = 0.1
 K = 10^6
 m = 10K^-1
-prob = SDE.SDEProblem(helper.testf2, helper.testg2,
-    ubar, (0.0, 100000000000.0), (K, m, xbar), noise_rate_prototype = 1.0)
-sol = SDE.solve(prob, SDE.SRA1())
+prob = SDE.SDEProblem(helper.testf, helper.testg,
+    log(xbar / (1 - xbar)), 
+    (0.0, 100000000000.0), 
+    (K, m, xbar), 
+    noise_rate_prototype = 1.0)
+sol = SDE.solve(prob, SDE.SOSRA())
 timeidx = helper.gettime(sol)
 outx = 1 ./ (1 .+ exp.(-sol.u))
 Plots.plot(sol.t[timeidx], outx[timeidx],
     color = :black, label = false)
-xbar
 StatsBase.mean(outx)
 xbar * (1 - xbar) / (K * m + 1)
 StatsBase.var(outx)
-=#
