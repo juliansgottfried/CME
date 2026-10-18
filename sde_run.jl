@@ -9,9 +9,9 @@ K = 10^6
 m = 10K^-1
 xbar = helper.fakexbar(S)
 
-R0 = 10^5 * K^-1
+R0 = 10
 η = 0.5
-π = 0.00001
+π = 0.01
 
 p = (S, K, m, xbar, R0, η, π)
 
@@ -20,18 +20,18 @@ y0 = ones(Float64, S) * minimum(xbar) / 10
 u0 = helper.makeu0(x0, y0)
 
 prob = SDE.SplitSDEProblem(helper.f_stiff!, helper.f_non!, helper.g!,
-    u0, (0.0, 1000.0), p, noise_rate_prototype = helper.setA(S))
-# sol = SDE.solve(prob, SDE.SKenCarp(autodiff = SDE.AutoFiniteDiff()))
+    u0, (0.0, 100000.0), p, noise_rate_prototype = helper.setA(S))
 sol = SDE.solve(prob, SDE.ImplicitEM(autodiff = SDE.AutoFiniteDiff()))
+# sol = SDE.solve(prob, SDE.SKenCarp(autodiff = SDE.AutoFiniteDiff()))
 
 outx, outz = helper.getsol(sol, S)
 timeidx = helper.gettime(sol)
 
-Plots.plot(sol.t[timeidx], outx[timeidx, :],
+Plots.plot(sol.t[timeidx], outx[timeidx, S],
     color = :black, label = false)
-Plots.plot(sol.t[timeidx], outz[timeidx, :],
+Plots.plot(sol.t[timeidx], outz[timeidx, S],
    color = :black, label = false)
-Plots.plot(sol.t[timeidx], (outx .* outz)[timeidx, :],
+Plots.plot(sol.t[timeidx], (outx .* outz)[timeidx, S],
     color = :black, label = false)
 
 #=

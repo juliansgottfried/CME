@@ -3,7 +3,7 @@ module helper
 p11(x, z, K, m, xbar, R0, η, π) = @. K * (1 - x) * (1 - η) * (m * xbar * π + (1 - m) * x * z)
 p10(x, z, K, m, xbar, R0, η, π) = @. K * (1 - x) * (m * xbar * (1 - π * (1 - η)) + (1 - m) * (x - x * z * (1 - η)))
 p01non(x, z, K, m, xbar, R0, η, π) = @. K * (x - x * z) * (1 - η) * (m * xbar * π + (1 - m) * x * z)
-p01stiff(x, z, K, m, xbar, R0, η, π) = @. R0 * K^2 * x * z * (x - x * z)
+p01stiff(x, z, K, m, xbar, R0, η, π) = @. K * R0 * sum(x * z) * (x - x * z)
 p01(x, z, K, m, xbar, R0, η, π) = @. p01non(x, z, K, m, xbar, R0, η, π) + p01stiff(x, z, K, m, xbar, R0, η, π)
 p0_1(x, z, K, m, xbar, R0, η, π) = @. K * x * z * (m * xbar * (1 - π * (1 - η)) + (1 - m) * (x - x * z * (1 - η)))
 p_10(x, z, K, m, xbar, R0, η, π) = @. K * (x - x * z) * (m * (1 - xbar) + (1 - m) * (1 - x))
@@ -176,7 +176,7 @@ end
 function gettime(sol)
     T = size(sol.t)[1]
     stepper = div(T, 1000) == 0 ? 1 : div(T, 1000)
-    1:stepper:T
+    div(T, 2):stepper:T
 end
 
 end
