@@ -1,19 +1,20 @@
-include("sde_functions.jl")
-
 import StochasticDiffEq as SDE
+import DiffEqCallbacks as CB
 import Plots
 
-S = 5
+include("sde_functions.jl")
+
+S = 100
 
 K = 10^6
 m = 10K^-1
 xbar = helper.fakexbar(S)
 
-R0 = 0
+R0 = 1
 η = 0.5
 π = 0.01
 
-isy = true
+isy = false
 
 p = (S, K, m, xbar, R0, η, π, isy)
 
@@ -22,38 +23,30 @@ y0 = ones(Float64, S) * minimum(xbar) / 10
 u0 = helper.makeu0(x0, y0, isy)
 
 prob = SDE.SDEProblem(helper.f!, helper.g!,
-    u0, (0.0, 100000.0), p, noise_rate_prototype = helper.setA(S))
-sol = SDE.solve(prob, SDE.SOSRA())
-# sol = SDE.solve(prob, SDE.SRA1())
-
-# prob = SDE.SplitSDEProblem(helper.f_stiff!, helper.f_non!, helper.g!,
-#     u0, (0.0, 100000.0), p, noise_rate_prototype = helper.setA(S))
-# sol = SDE.solve(prob, SDE.ImplicitEM(autodiff = SDE.AutoFiniteDiff()))
-# sol = SDE.solve(prob, SDE.SKenCarp(autodiff = SDE.AutoFiniteDiff()))
+    u0, (0.0, 10^6), p, noise_rate_prototype = helper.setA(S))
+sol = SDE.solve(prob, SDE.SOSRA(),
+    isoutofdomain = (u, p, t) -> any(x -> x < 0, u))
+# sol = SDE.solve(prob, SDE.SOSRA(),
+#     callback = CB.PositiveDomain())
 
 outx, outyorz = helper.getsol(sol, S)
 timeidx = helper.gettime(sol)
 
 Plots.plot(sol.t[timeidx], outx[timeidx, :],
     color = :black, label = false)
-Plots.plot(sol.t[timeidx], outyorz[timeidx, :],
-   color = :black, label = false)
+if isy
+    Plots.plot(sol.t[timeidx], outyorz[timeidx, :],
+        color = :black, label = false)
+else
+    Plots.plot(sol.t[timeidx], outx[timeidx, :] .* outyorz[timeidx, :],
+        color = :black, label = false)
+end
+if isy
+    Plots.plot(sol.t[timeidx], outyorz[timeidx, :] ./ outx[timeidx, :],
+        color = :black, label = false)
+else
+    Plots.plot(sol.t[timeidx], outyorz[timeidx, :],
+        color = :black, label = false)
+end
 
-#=
-xbar = 0.1
-K = 10^6
-m = 10K^-1
-prob = SDE.SDEProblem(helper.testf, helper.testg,
-    log(xbar / (1 - xbar)), 
-    (0.0, 100000.0), 
-    (K, m, xbar), 
-    noise_rate_prototype = 1.0)
-sol = SDE.solve(prob, SDE.SRA1())
-timeidx = helper.gettime(sol)
-outx = 1 ./ (1 .+ exp.(-sol.u))
-Plots.plot(sol.t[timeidx], outx[timeidx],
-    color = :black, label = false)
-StatsBase.mean(outx[1:100:end])
-xbar * (1 - xbar) / (K * m + 1)
-StatsBase.var(outx)
-=#
+shape(outyorz)
