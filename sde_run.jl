@@ -1,5 +1,7 @@
 import StochasticDiffEq as SDE
 import DiffEqCallbacks as CB
+import StatsBase
+import StatsPlots
 import Plots
 
 include("sde_functions.jl")
@@ -10,7 +12,7 @@ K = 10^6
 m = 10K^-1
 xbar = helper.fakexbar(S)
 
-R0 = 1
+R0 = 2
 η = 0.5
 π = 0.01
 
@@ -32,21 +34,18 @@ sol = SDE.solve(prob, SDE.SOSRA(),
 outx, outyorz = helper.getsol(sol, S)
 timeidx = helper.gettime(sol)
 
-Plots.plot(sol.t[timeidx], outx[timeidx, :],
-    color = :black, label = false)
-if isy
-    Plots.plot(sol.t[timeidx], outyorz[timeidx, :],
-        color = :black, label = false)
-else
-    Plots.plot(sol.t[timeidx], outx[timeidx, :] .* outyorz[timeidx, :],
-        color = :black, label = false)
-end
-if isy
-    Plots.plot(sol.t[timeidx], outyorz[timeidx, :] ./ outx[timeidx, :],
-        color = :black, label = false)
-else
-    Plots.plot(sol.t[timeidx], outyorz[timeidx, :],
-        color = :black, label = false)
-end
+StatsPlots.density(outyorz[timeidx, :], color = :black, label = false)
 
-shape(outyorz)
+#=
+Plots.plot(sol.t[timeidx], outx[timeidx, :], color = :black, label = false)
+if isy
+    Plots.plot(sol.t[timeidx], outyorz[timeidx, :], color = :black, label = false)
+else
+    Plots.plot(sol.t[timeidx], outx[timeidx, :] .* outyorz[timeidx, :], color = :black, label = false)
+end
+if isy
+    Plots.plot(sol.t[timeidx], outyorz[timeidx, :] ./ outx[timeidx, :], color = :black, label = false)
+else
+    Plots.plot(sol.t[timeidx], outyorz[timeidx, :], color = :black, label = false)
+end
+=#
