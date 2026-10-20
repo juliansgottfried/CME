@@ -1,6 +1,7 @@
 import StochasticDiffEq as SDE
 import StatsBase
 import Plots
+import DelimitedFiles as DF
 
 include("sde_functions_2.jl")
 
@@ -10,7 +11,7 @@ K = 10^6
 m = 10K^-1
 xbar = helper.fakexbar(S)
 
-R0 = 0
+R0 = 0.5
 η = 0.5
 π = 0.01
 
@@ -27,10 +28,18 @@ sol = SDE.solve(prob, SDE.LambaEM(), maxiters = 10^7)
 outx, outy = helper.getsol(sol, S)
 timeidx = helper.gettime(sol)
 
-Plots.plot(outx[timeidx, :])
-Plots.plot(outy[timeidx, :])
+Plots.plot(outx[timeidx, :], label = false)
+Plots.plot(outy[timeidx, :], label = false)
+Plots.plot(outy[timeidx, :] ./ outx[timeidx, :], label = false)
 
-Plots.plot(sum(eachcol(outx[timeidx, :])))
+Plots.plot(sum(eachcol(outx[timeidx, :])), 
+    color = :black, label = false)
+Plots.plot(xbar, 
+    [StatsBase.mean(eachrow(outx[timeidx, :])), xbar],
+    color = :black, label = false)
+Plots.plot(xbar .* (1 .- xbar) ./ (K * m + 1), 
+    [StatsBase.var(eachrow(outx[timeidx, :])), xbar .* (1 .- xbar) ./ (K * m + 1)],
+    color = :black, label = false)
 
-Plots.plot(xbar, StatsBase.mean(eachrow(outx)))
-Plots.plot(xbar .* (1 .- xbar) ./ (K * m + 1), StatsBase.var(eachrow(outx)))
+DF.writedlm("outx.csv", outx)
+DF.writedlm("outy.csv", outy)

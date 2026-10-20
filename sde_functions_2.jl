@@ -37,9 +37,9 @@ function g!(du, u, p, t)
     x, y = load(u, S)
     x .= max.(x, 0.0)
     y .= max.(y, 0.0)
-    sigmaloop!(du, S, sqrt.(max.(σxx(x, K), 0)), 
-        sqrt.(max.(σyy(x, y, K, R0, η), 0)), 
-        sqrt.(max.(σxy(x, y, K, η), 0)))
+    sigmaloop!(du, S, sqrt.(σxx(x, K)), 
+        sqrt.(σyy(x, y, K, R0, η)), 
+        sqrt.(σxy(x, y, K, η)))
 end
 
 function setA(S)
@@ -69,16 +69,6 @@ end
 function fakexbar(S)
     xbar = exp.((1:S) / S)
     xbar ./ sum(xbar)
-end
-
-function testf(u, p, t)
-    K, m, xbar = values(p)
-    m * (xbar - u)
-end
-
-function testg(u, p, t)
-    K, m, xbar = values(p)
-    sqrt(max(2u * (1 - u) / K, tol))
 end
 
 end
