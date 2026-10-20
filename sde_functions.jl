@@ -4,8 +4,8 @@ tol = 1.0e-18
 
 transf(x) = x
 inv_transf(x) = x
-prime1(x) = 1
-prime2(x) = 0
+prime1(x) = oneunit(Float64)
+prime2(x) = zero(Float64)
 
 #=
 transf(x) = log(x / (1 - x))
@@ -25,20 +25,20 @@ p_1_1(x, y, K, m, xbar, R0, η, π) = @. K * y * (m * (1 - xbar) + (1 - m) * (1 
 
 Δx11(K) = 1 / K
 Δx10(K) = 1 / K
-Δx01(K) = 0
-Δx0_1(K) = 0
+Δx01(K) = zero(Float64)
+Δx0_1(K) = zero(Float64)
 Δx_10(K) = -1 / K
 Δx_1_1(K) = -1 / K
 
 Δy11(K) = 1 / K
-Δy10(K) = 0
+Δy10(K) = zero(Float64)
 Δy01(K) = 1 / K
 Δy0_1(K) = -1 / K
-Δy_10(K) = 0
+Δy_10(K) = zero(Float64)
 Δy_1_1(K) = -1 / K
 
 Δz11(x, y, K) = @. (x - y) / (x * (K * x + 1))
-Δz10(x, y, K) = @. - y / (x * (K * x + 1))
+Δz10(x, y, K) = @. -y / (x * (K * x + 1))
 Δz01(x, y, K) = @. 1 / (K * x)
 Δz0_1(x, y, K) = @. -1 / (K * x)
 Δz_10(x, y, K) = @. y / (x * (K * x - 1))
@@ -101,15 +101,10 @@ p_1_1(x, y, K, m, xbar, R0, η, π) = @. K * y * (m * (1 - xbar) + (1 - m) * (1 
     p_10(x, y, K, m, xbar, R0, η, π) * Δx_10(K) * Δz_10(x, y, K) +
     p_1_1(x, y, K, m, xbar, R0, η, π) * Δx_1_1(K) * Δz_1_1(x, y, K), tol))
 
-function load(u, S)
-    v = inv_transf.(u)
-    (v[1:2:2S], v[2:2:2S])
-end
+loadx(u, S) = inv_transf.(u)[1:2:2S]
+loadyorz(u, S) = inv_transf.(u)[2:2:2S]
 
-function muop_non!(du, S, K, m, xbar, R0, η, π, isy, x, yorz, s11, s22, s12)
-    diag_ssT_1 = s11 + s12
-    diag_ssT_2 = s12 + s22
-
+function muop_non!(du, S, K, m, xbar, R0, η, π, isy, x, yorz, diag_ssT_1, diag_ssT_2)
     if isy
         du[1:2:2S] .= @. prime1(x) * μx(x, yorz, K, m, xbar, R0, η, π) + prime2(x) * diag_ssT_1
         du[2:2:2S] .= @. prime1(yorz) * μy_non(x, yorz, K, m, xbar, R0, η, π) + prime2(yorz) * diag_ssT_2
@@ -119,9 +114,7 @@ function muop_non!(du, S, K, m, xbar, R0, η, π, isy, x, yorz, s11, s22, s12)
     end
 end
 
-function muop_stiff!(du, S, K, m, xbar, R0, η, π, isy, x, yorz, s22, s12)
-    diag_ssT_2 = s12 + s22
-
+function muop_stiff!(du, S, K, m, xbar, R0, η, π, isy, x, yorz, diag_ssT_2)
     du[1:2:2S] .= 0
 
     if isy
@@ -131,10 +124,7 @@ function muop_stiff!(du, S, K, m, xbar, R0, η, π, isy, x, yorz, s22, s12)
     end
 end
 
-function muop!(du, S, K, m, xbar, R0, η, π, isy, x, yorz, s11, s22, s12)
-    diag_ssT_1 = s11 + s12
-    diag_ssT_2 = s12 + s22
-
+function muop!(du, S, K, m, xbar, R0, η, π, isy, x, yorz, diag_ssT_1, diag_ssT_2)
     if isy
         du[1:2:2S] .= @. prime1(x) * μx(x, yorz, K, m, xbar, R0, η, π) + prime2(x) * diag_ssT_1
         du[2:2:2S] .= @. prime1(yorz) * μy(x, yorz, K, m, xbar, R0, η, π) + prime2(yorz) * diag_ssT_2
@@ -147,79 +137,70 @@ end
 function f_non!(du, u, p, t)
     S, K, m, xbar, R0, η, π, isy = values(p)
 
-    x, yorz = load(u, S)
-
     if isy
-        s11 = σxx(x, yorz, K, m, xbar, R0, η, π) .^2
-        s22 = σyy(x, yorz, K, m, xbar, R0, η, π) .^2
-        s12 = σxy(x, yorz, K, m, xbar, R0, η, π) .^2
+        s11 = σxx(loadx(u, S), loadyorz(u, S), K, m, xbar, R0, η, π) .^2
+        s22 = σyy(loadx(u, S), loadyorz(u, S), K, m, xbar, R0, η, π) .^2
+        s12 = σxy(loadx(u, S), loadyorz(u, S), K, m, xbar, R0, η, π) .^2
     else
-        s11 = σxx(x, x .* yorz, K, m, xbar, R0, η, π) .^2
-        s22 = σzz(x, x .* yorz, K, m, xbar, R0, η, π) .^2
-        s12 = σxz(x, x .* yorz, K, m, xbar, R0, η, π) .^2
+        s11 = σxx(loadx(u, S), loadx(u, S) .* loadyorz(u, S), K, m, xbar, R0, η, π) .^2
+        s22 = σzz(loadx(u, S), loadx(u, S) .* loadyorz(u, S), K, m, xbar, R0, η, π) .^2
+        s12 = σxz(loadx(u, S), loadx(u, S) .* loadyorz(u, S), K, m, xbar, R0, η, π) .^2
     end
 
-    muop_non!(du, S, K, m, xbar, R0, η, π, isy, x, yorz, s11, s22, s12)
+    muop_non!(du, S, K, m, xbar, R0, η, π, isy, loadx(u, S), loadyorz(u, S), s11 + s12, s12 + s22)
 end
 
 function f_stiff!(du, u, p, t)
     S, K, m, xbar, R0, η, π, isy = values(p)
 
-    x, yorz = load(u, S)
-
     if isy
-        s22 = σyy(x, yorz, K, m, xbar, R0, η, π) .^2
-        s12 = σxy(x, yorz, K, m, xbar, R0, η, π) .^2
+        s22 = σyy(loadx(u, S), loadyorz(u, S), K, m, xbar, R0, η, π) .^2
+        s12 = σxy(loadx(u, S), loadyorz(u, S), K, m, xbar, R0, η, π) .^2
     else
-        s22 = σzz(x, x .* yorz, K, m, xbar, R0, η, π) .^2
-        s12 = σxz(x, x .* yorz, K, m, xbar, R0, η, π) .^2
+        s22 = σzz(loadx(u, S), loadx(u, S) .* loadyorz(u, S), K, m, xbar, R0, η, π) .^2
+        s12 = σxz(loadx(u, S), loadx(u, S) .* loadyorz(u, S), K, m, xbar, R0, η, π) .^2
     end
 
-    muop_stiff!(du, S, K, m, xbar, R0, η, π, isy, x, yorz, s22, s12)
+    muop_stiff!(du, S, K, m, xbar, R0, η, π, isy, loadx(u, S), loadyorz(u, S), s12 + s22)
 end
 
 function f!(du, u, p, t)
     S, K, m, xbar, R0, η, π, isy = values(p)
 
-    x, yorz = load(u, S)
-
     if isy
-        s11 = σxx(x, yorz, K, m, xbar, R0, η, π) .^2
-        s22 = σyy(x, yorz, K, m, xbar, R0, η, π) .^2
-        s12 = σxy(x, yorz, K, m, xbar, R0, η, π) .^2
+        s11 = σxx(loadx(u, S), loadyorz(u, S), K, m, xbar, R0, η, π) .^2
+        s22 = σyy(loadx(u, S), loadyorz(u, S), K, m, xbar, R0, η, π) .^2
+        s12 = σxy(loadx(u, S), loadyorz(u, S), K, m, xbar, R0, η, π) .^2
     else
-        s11 = σxx(x, x .* yorz, K, m, xbar, R0, η, π) .^2
-        s22 = σzz(x, x .* yorz, K, m, xbar, R0, η, π) .^2
-        s12 = σxz(x, x .* yorz, K, m, xbar, R0, η, π) .^2
+        s11 = σxx(loadx(u, S), loadx(u, S) .* loadyorz(u, S), K, m, xbar, R0, η, π) .^2
+        s22 = σzz(loadx(u, S), loadx(u, S) .* loadyorz(u, S), K, m, xbar, R0, η, π) .^2
+        s12 = σxz(loadx(u, S), loadx(u, S) .* loadyorz(u, S), K, m, xbar, R0, η, π) .^2
     end
 
-    muop!(du, S, K, m, xbar, R0, η, π, isy, x, yorz, s11, s22, s12)
+    muop!(du, S, K, m, xbar, R0, η, π, isy, loadx(u, S), loadyorz(u, S), s11 + s12, s12 + s22)
 end
 
 function sigmaloop!(du, S, x, yorz, s11, s22, s12)
     for i in 1:S
-        idx = 2(i - 1)
-        du[idx .+ (1:2), idx + 1] .= @. [prime1(x[i]) * s11[i]; prime1(yorz[i]) * s12[i]]
-        du[idx .+ (1:2), idx + 2] .= @. [prime1(x[i]) * s12[i]; prime1(yorz[i]) * s22[i]]
+        du[2(i - 1) .+ (1:2), 2(i - 1) + 1] .= @. [prime1(x[i]) * s11[i]; prime1(yorz[i]) * s12[i]]
+        du[2(i - 1) .+ (1:2), 2(i - 1) + 2] .= @. [prime1(x[i]) * s12[i]; prime1(yorz[i]) * s22[i]]
     end    
 end
 
 function g!(du, u, p, t)
     S, K, m, xbar, R0, η, π, isy = values(p)
 
-    x, yorz = load(u, S)
-
     if isy
-        s11 = σxx(x, yorz, K, m, xbar, R0, η, π)
-        s22 = σyy(x, yorz, K, m, xbar, R0, η, π)
-        s12 = σxy(x, yorz, K, m, xbar, R0, η, π)
+        s11 = σxx(loadx(u, S), loadyorz(u, S), K, m, xbar, R0, η, π)
+        s22 = σyy(loadx(u, S), loadyorz(u, S), K, m, xbar, R0, η, π)
+        s12 = σxy(loadx(u, S), loadyorz(u, S), K, m, xbar, R0, η, π)
     else
-        s11 = σxx(x, x .* yorz, K, m, xbar, R0, η, π)
-        s22 = σzz(x, x .* yorz, K, m, xbar, R0, η, π)
-        s12 = σxz(x, x .* yorz, K, m, xbar, R0, η, π)
+        s11 = σxx(loadx(u, S), loadx(u, S) .* loadyorz(u, S), K, m, xbar, R0, η, π)
+        s22 = σzz(loadx(u, S), loadx(u, S) .* loadyorz(u, S), K, m, xbar, R0, η, π)
+        s12 = σxz(loadx(u, S), loadx(u, S) .* loadyorz(u, S), K, m, xbar, R0, η, π)
     end
 
-    sigmaloop!(du, S, x, yorz, s11, s22, s12)
+    sigmaloop!(du, S, loadx(u, S), loadyorz(u, S), s11, s22, s12)
 end
 
 function setA(S)

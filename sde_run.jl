@@ -1,6 +1,5 @@
 import StochasticDiffEq as SDE
-import DiffEqCallbacks as CB
-import StatsBase
+# import DiffEqCallbacks as CB
 import StatsPlots
 import Plots
 
@@ -12,11 +11,11 @@ K = 10^6
 m = 10K^-1
 xbar = helper.fakexbar(S)
 
-R0 = 2
+R0 = 1
 η = 0.5
 π = 0.01
 
-isy = false
+isy = true
 
 p = (S, K, m, xbar, R0, η, π, isy)
 
@@ -34,7 +33,8 @@ sol = SDE.solve(prob, SDE.SOSRA(),
 outx, outyorz = helper.getsol(sol, S)
 timeidx = helper.gettime(sol)
 
-StatsPlots.density(outyorz[timeidx, :], color = :black, label = false)
+# Plots.plot(outx[timeidx, :], log.(outyorz[timeidx, :] ./ outx[timeidx, :]), color = :black, label = false)
+# StatsPlots.density(outyorz[timeidx, :], color = :black, label = false)
 
 #=
 Plots.plot(sol.t[timeidx], outx[timeidx, :], color = :black, label = false)
@@ -49,3 +49,6 @@ else
     Plots.plot(sol.t[timeidx], outyorz[timeidx, :], color = :black, label = false)
 end
 =#
+
+# DelimitedFiles.writedlm("outx_10.csv", outx, ',')
+# DelimitedFiles.writedlm("outy_10.csv", outyorz, ',')
