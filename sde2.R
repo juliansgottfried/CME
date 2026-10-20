@@ -25,11 +25,10 @@ cbind(flattenx, flatteny) |> data.frame() |>
     `colnames<-`(c("x", "y", "sp")) |> 
     mutate(z = y / x) |> 
     mutate(class = floor((sp - 1) / 10)) |> 
-    ggplot(aes(x = x, y = log(z))) +
-    geom_point(shape = 12, alpha = 0.1) +
-    labs(x = "N/K", y = "log[I/N]") +
+    ggplot(aes(x = x, y = y)) +
+    geom_point(shape = 12, alpha = 0.05) +
+    labs(x = "N/K", y = "I/K") +
     theme_classic() +
     theme(text = element_text(size = 12, family = "mono"))
-
 
 
