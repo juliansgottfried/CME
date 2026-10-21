@@ -5,9 +5,9 @@ import DelimitedFiles as DF
 
 include("sde_functions_2.jl")
 
-S = 10
+S = 100
 
-K = 10^6
+K = 10^7
 m = 10K^-1
 xbar = helper.fakexbar(S)
 
@@ -30,7 +30,12 @@ timeidx = helper.gettime(sol)
 
 Plots.plot(outx[timeidx, :], label = false)
 Plots.plot(outy[timeidx, :], label = false)
-Plots.plot(outy[timeidx, :] ./ outx[timeidx, :], label = false)
+
+idx = S
+Plots.plot(outx[timeidx, idx], label = false, color = :black)
+Plots.plot(outy[timeidx, idx], label = false, color = :black)
+Plots.scatter(outx[timeidx, idx], outy[timeidx, idx], 
+    label = false, color = :black)
 
 Plots.plot(sum(eachcol(outx[timeidx, :])), 
     color = :black, label = false)
@@ -41,5 +46,5 @@ Plots.plot(xbar .* (1 .- xbar) ./ (K * m + 1),
     [StatsBase.var(eachrow(outx[timeidx, :])), xbar .* (1 .- xbar) ./ (K * m + 1)],
     color = :black, label = false)
 
-DF.writedlm("outx.csv", outx)
-DF.writedlm("outy.csv", outy)
+DF.writedlm("outx_100.csv", outx, ',')
+DF.writedlm("outy_100.csv", outy, ',')

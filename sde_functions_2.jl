@@ -67,7 +67,7 @@ function gettime(sol)
 end
 
 function fakexbar(S)
-    xbar = exp.((1:S) / S)
+    xbar = exp.((1:S) / 0.1S)
     xbar ./ sum(xbar)
 end
 
