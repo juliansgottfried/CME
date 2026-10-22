@@ -5,7 +5,7 @@ import DelimitedFiles as DF
 
 include("sde_functions_2.jl")
 
-xbar = DF.readdlm("xbar.csv", ',')
+xbar = sort(DF.readdlm("xbar.csv", ','), dims = 1, rev = true)
 
 S = size(xbar)[1]
 
@@ -13,7 +13,7 @@ K = 10^7
 κ = 134.8684
 m = κ / K
 
-R0 = 0.5
+R0 = 1
 η = 0.5
 π = 0.01
 
@@ -25,15 +25,18 @@ u0 = helper.makeu0(x0, y0)
 
 prob = SDE.SDEProblem(helper.f!, helper.g!,
     u0, (0.0, 10^5), p, noise_rate_prototype = helper.setA(S))
-sol = SDE.solve(prob, SDE.LambaEM(), maxiters = 10^7)
+# sol = SDE.solve(prob, SDE.LambaEM(), maxiters = 10^7)
+sol = SDE.solve(prob, SDE.SRA1(), maxiters = 10^7)
 
 outx, outy = helper.getsol(sol, S)
 timeidx = helper.gettime(sol)
 
+# plot x and y
 Plots.plot(outx[timeidx, :], label = false)
 Plots.plot(outy[timeidx, :], label = false)
 
-idx = S
+# plot an x and a y
+idx = 10
 Plots.plot(outx[timeidx, idx], label = false, color = :black)
 Plots.plot(outy[timeidx, idx], label = false, color = :black)
 Plots.scatter(outx[timeidx, idx], outy[timeidx, idx], 
@@ -42,9 +45,11 @@ Plots.scatter(outx[timeidx, idx], outy[timeidx, idx],
 Plots.scatter(xbar, 
     [StatsBase.mean(eachrow(outx[timeidx, :]))],
     color = :black, label = false)
+Plots.plot!(xbar, xbar, color = :red, label = false)
 Plots.scatter(xbar .* (1 .- xbar) ./ (K * m + 1), 
     [StatsBase.var(eachrow(outx[timeidx, :]))],
     color = :black, label = false)
+Plots.plot!(xbar .* (1 .- xbar) ./ (K * m + 1), xbar .* (1 .- xbar) ./ (K * m + 1), color = :red, label = false)
 
 # DF.writedlm("outx_100.csv", outx, ',')
 # DF.writedlm("outy_100.csv", outy, ',')
