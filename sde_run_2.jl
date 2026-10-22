@@ -35,13 +35,14 @@ timeidx = helper.gettime(sol)
 Plots.plot(outx[timeidx, :], label = false)
 Plots.plot(outy[timeidx, :], label = false)
 
-# plot an x and a y
-idx = 10
+# plot a particular x and y
+idx = 50
 Plots.plot(outx[timeidx, idx], label = false, color = :black)
 Plots.plot(outy[timeidx, idx], label = false, color = :black)
 Plots.scatter(outx[timeidx, idx], outy[timeidx, idx], 
     label = false, color = :black)
 
+# check x distribution
 Plots.scatter(xbar, 
     [StatsBase.mean(eachrow(outx[timeidx, :]))],
     color = :black, label = false)
@@ -51,5 +52,5 @@ Plots.scatter(xbar .* (1 .- xbar) ./ (K * m + 1),
     color = :black, label = false)
 Plots.plot!(xbar .* (1 .- xbar) ./ (K * m + 1), xbar .* (1 .- xbar) ./ (K * m + 1), color = :red, label = false)
 
-# DF.writedlm("outx_100.csv", outx, ',')
-# DF.writedlm("outy_100.csv", outy, ',')
+DF.writedlm("outx.csv", outx, ',')
+DF.writedlm("outy.csv", outy, ',')
