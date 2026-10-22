@@ -107,6 +107,15 @@ for (i in 1:length(cmes)) {
     statistics[is.na(statistics)] <- 0
     NI[N * (i - 1) + (1:N), ] <- statistics %>% mutate(cme = cmes[i]) %>% select(cme, N, I)
 }
+
+fams <- cmemat %>% filter(.[["c4"]]) %>% pull(family) %>% unique
+c4sp <- cmemat %>% 
+    filter(family %in% fams) |> 
+    group_by(aid) %>% 
+    select(aid, species) |> 
+    distinct() |> 
+    pull(species) |> unique()
+
 ```
 
 ## Means and variances
