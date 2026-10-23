@@ -1,14 +1,13 @@
 import StochasticDiffEq as SDE
 import DiffEqCallbacks as CB
 import DelimitedFiles as DF
-# import StatsBase
 import Plots
 
 include("sde_functions_6.jl")
 
 xbar = sort(DF.readdlm("xbar.csv", ','), dims = 1, rev = true)
 pT = sum(xbar)
-p1 = 0.01
+p1 = 0.05
 f = p1 / pT
 
 K = 10^7
@@ -17,7 +16,7 @@ m = κ / K
 
 η = 0.5
 π = 0.05
-R0 = 1
+R0 = 1.0
 
 p = m, pT, f, η, π, R0, K
 

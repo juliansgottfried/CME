@@ -21,7 +21,8 @@ sigXY(X, x, Y, y, m, pT, f, η, π, R0, K) = (m * ((1 - η) * (1 - X) * (pT * π
 sigxy(X, x, Y, y, m, pT, f, η, π, R0, K) = (m * ((1 - η) * (1 - x) * (f * pT * π - y) - y * (f * pT - x)) + (2 - η) * (1 - x) * y) / K
 
 sigXy(X, x, Y, y, m, pT, f, η, π, R0, K) = (m * ((1 - η) * (1 - X) * (f * pT * π - y) - y * (pT - X)) + (2 - η) * (1 - X) * y) / K
-sigxY(X, x, Y, y, m, pT, f, η, π, R0, K) = (m * (1 - η) * ((f * pT * π - y - x * (pT * π - Y) - Y * (f * pT - x)) + (2 - η) * (y - x * Y))) / K
+# sigxY(X, x, Y, y, m, pT, f, η, π, R0, K) = (m * (1 - η) * ((f * pT * π - y - x * (pT * π - Y) - Y * (f * pT - x)) + (2 - η) * (y - x * Y))) / K
+sigxY(X, x, Y, y, m, pT, f, η, π, R0, K) = (m * ((1 - η) * (1 - x) * (pT * π - Y) - Y * (f * pT - x)) + (2 - η) * (1 - x) * Y) / K
 
 function f!(du, u, p, t)
     m, pT, f, η, π, R0, K = values(p)
