@@ -1,10 +1,10 @@
 module helpTer
 
-μX(X, x, Y, y, m, pT, f, η, π, R0, K) = m * (pT - X)
-μx(X, x, Y, y, m, pT, f, η, π, R0, K) = m * (pT * f - x)
+μX(X, x, Y, y, m, pT, f, η, π, R0, K) = 0
+μx(X, x, Y, y, m, pT, f, η, π, R0, K) = 0
 
-μY(X, x, Y, y, m, pT, f, η, π, R0, K) = m * (1 - η) * (pT * π - Y) - η * Y + R0 * Y * (X - Y)
-μy(X, x, Y, y, m, pT, f, η, π, R0, K) = m * (1 - η) * (pT * f * π - y) - η * y + R0 * Y * (x - y)
+μY(X, x, Y, y, m, pT, f, η, π, R0, K) = R0 * Y * (X - Y) - η * Y 
+μy(X, x, Y, y, m, pT, f, η, π, R0, K) = R0 * Y * (x - y) - η * y
 
 sigXX(X, x, Y, y, m, pT, f, η, π, R0, K) = 2X * (1 - X) / K
 sigxx(X, x, Y, y, m, pT, f, η, π, R0, K) = 2x * (1 - x) / K
@@ -12,8 +12,8 @@ sigxx(X, x, Y, y, m, pT, f, η, π, R0, K) = 2x * (1 - x) / K
 sigYY(X, x, Y, y, m, pT, f, η, π, R0, K) = (2Y * (1 - η/2 - Y * (1 - η)) + R0 * Y * (X - Y)) / K
 sigyy(X, x, Y, y, m, pT, f, η, π, R0, K) = (2y * (1 - η/2 - y * (1 - η)) + R0 * Y * (x - y)) / K
 
-sigXx(X, x, Y, y, m, pT, f, η, π, R0, K) = (x * ((1 - m) * (1 - 2X) + 1) - m * pT * (x - f * (1 - X))) / K
-sigYy(X, x, Y, y, m, pT, f, η, π, R0, K) = (y * (1 - η) * ((1 - m) * (1 - 2Y) + 1) - m * pT * π * (1 - η) * (y - f * (1 - Y)) + R0 * Y * (x - y)) / K
+sigXx(X, x, Y, y, m, pT, f, η, π, R0, K) = (2x * (1 - X)) / K
+sigYy(X, x, Y, y, m, pT, f, η, π, R0, K) = (2y * (1 - η) * (1 - Y) + R0 * Y * (x - y)) / K
 
 sigXY(X, x, Y, y, m, pT, f, η, π, R0, K) = (2 - η) * (1 - X) * Y / K
 sigxy(X, x, Y, y, m, pT, f, η, π, R0, K) = (2 - η) * (1 - x) * y / K

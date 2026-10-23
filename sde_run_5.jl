@@ -14,9 +14,9 @@ K = 10^7
 κ = 21.4
 m = κ / K
 
-R0 = 0.8
 η = 0.5
 π = 0.05
+R0 = 0.8
 
 p = m, pT, f, η, π, R0, K
 
@@ -33,10 +33,12 @@ timeidx = helper.gettime(sol, 1000)
 # X and x
 Plots.plot(outX[timeidx], label = false, color = :black)
 Plots.plot(outx[timeidx], label = false, color = :black)
+# Plots.plot(outx[timeidx] ./ outX[timeidx], label = false, color = :black)
 
 # Y and y
 Plots.plot(outY[timeidx], label = false, color = :black)
 Plots.plot(outy[timeidx], label = false, color = :black)
+# Plots.plot(outy[timeidx] ./ outY[timeidx], ylims = (0, Inf), label = false, color = :black)
 
 # X vs. x and Y vs. y
 Plots.scatter(outX[timeidx], outx[timeidx], label = false, color = :black)
@@ -45,6 +47,9 @@ Plots.scatter(outY[timeidx], outy[timeidx], label = false, color = :black)
 # X vs. y and x vs. y
 Plots.scatter(outX[timeidx], outY[timeidx], label = false, color = :black)
 Plots.scatter(outx[timeidx], outy[timeidx], label = false, color = :black)
+
+Ystar = (R0 * pT - η) / R0
+ystar = (m * (1 - η) + R0 * pT) / (pT * f * (m * (1 - η) - η + R0 * pT))
 
 #=
 # check x1 distribution

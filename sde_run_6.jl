@@ -11,12 +11,12 @@ p1 = 0.01
 f = p1 / pT
 
 K = 10^7
-κ = 134.8684
+κ = 21.4
 m = κ / K
 
-R0 = 0.8
 η = 0.5
 π = 0.05
+R0 = 0.8
 
 p = m, pT, f, η, π, R0, K
 
@@ -38,24 +38,10 @@ Plots.plot(outx[timeidx], label = false, color = :black)
 Plots.plot(outY[timeidx], label = false, color = :black)
 Plots.plot(outy[timeidx], label = false, color = :black)
 
-# X vs. y and x vs. y
-Plots.scatter(outX[timeidx], outY[timeidx], label = false, color = :black)
-Plots.scatter(outx[timeidx], outy[timeidx], label = false, color = :black)
-
 # X vs. x and Y vs. y
 Plots.scatter(outX[timeidx], outx[timeidx], label = false, color = :black)
 Plots.scatter(outY[timeidx], outy[timeidx], label = false, color = :black)
 
-#=
-# check x1 distribution
-pT
-StatsBase.mean(outX)
-pT * (1 - pT) / (K * m + 1) 
-StatsBase.var(outX)
-
-# check x2 distribution
-p1
-StatsBase.mean(outx)
-p1 * (1 - p1) / (K * m + 1) 
-StatsBase.var(outx)
-=#
+# X vs. y and x vs. y
+Plots.scatter(outX[timeidx], outY[timeidx], label = false, color = :black)
+Plots.scatter(outx[timeidx], outy[timeidx], label = false, color = :black)
