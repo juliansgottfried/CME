@@ -38,13 +38,13 @@ Plots.plot(outx[timeidx], label = false, color = :black)
 Plots.plot(outY[timeidx], label = false, color = :black)
 Plots.plot(outy[timeidx], label = false, color = :black)
 
-# X vs. y and x vs. y
-Plots.scatter(outX[timeidx], outY[timeidx], label = false, color = :black)
-Plots.scatter(outx[timeidx], outy[timeidx], label = false, color = :black)
-
 # X vs. x and Y vs. y
 Plots.scatter(outX[timeidx], outx[timeidx], label = false, color = :black)
 Plots.scatter(outY[timeidx], outy[timeidx], label = false, color = :black)
+
+# X vs. y and x vs. y
+Plots.scatter(outX[timeidx], outY[timeidx], label = false, color = :black)
+Plots.scatter(outx[timeidx], outy[timeidx], label = false, color = :black)
 
 #=
 # check x1 distribution
