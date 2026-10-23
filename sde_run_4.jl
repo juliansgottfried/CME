@@ -6,14 +6,14 @@ import Plots
 include("sde_functions_4.jl")
 
 xbar = sort(DF.readdlm("xbar.csv", ','), dims = 1, rev = true)
-p1 = maximum(xbar)
-p2 = sum(xbar) - p1
+p2 = maximum(xbar)
+p1 = sum(xbar) - p2
 
 K = 10^7
 κ = 134.8684
 m = κ / K
 
-R0 = 0
+R0 = 0.8
 η = 0.5
 π = 0.05
 
@@ -37,6 +37,7 @@ Plots.plot(outx2[timeidx], label = false, color = :black)
 Plots.plot(outy1[timeidx], label = false, color = :black)
 Plots.plot(outy2[timeidx], label = false, color = :black)
 
+#=
 # check x1 distribution
 p1
 StatsBase.mean(outx1)
@@ -48,3 +49,4 @@ p2
 StatsBase.mean(outx2)
 p2 * (1 - p2) / (K * m + 1) 
 StatsBase.var(outx2)
+=#
