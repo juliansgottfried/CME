@@ -6,7 +6,7 @@ import Plots
 include("sde_functions_4.jl")
 
 xbar = sort(DF.readdlm("xbar.csv", ','), dims = 1, rev = true)
-p2 = 0.025
+p2 = 0.001
 p1 = sum(xbar) - p2
 
 K = 10^7
@@ -41,7 +41,6 @@ Plots.plot(outy2[timeidx], label = false, color = :black)
 Plots.scatter(outx1[timeidx], outy1[timeidx], label = false, color = :black)
 Plots.scatter(outx2[timeidx], outy2[timeidx], label = false, color = :black)
 
-#=
 # check x1 distribution
 p1
 StatsBase.mean(outx1)
@@ -53,4 +52,3 @@ p2
 StatsBase.mean(outx2)
 p2 * (1 - p2) / (K * m + 1) 
 StatsBase.var(outx2)
-=#
