@@ -6,7 +6,7 @@ import Plots
 include("sde_functions_4.jl")
 
 xbar = sort(DF.readdlm("xbar.csv", ','), dims = 1, rev = true)
-p2 = 0.01
+p2 = 0.025
 p1 = sum(xbar) - p2
 
 K = 10^7
@@ -22,22 +22,22 @@ p = (m, p1, p2, η, π, R0, K)
 u0 = [p1; p2; π * p1; π * p2]
 
 prob = SDE.SDEProblem(helper.f!, helper.g!, 
-    u0, (0.0, 10^7), p, 
+    u0, (0.0, 10^8), p, 
     noise_rate_prototype = ones(Float64, 4, 4))
-sol = SDE.solve(prob, SDE.ImplicitEM(), callback = CB.PositiveDomain())
+sol = SDE.solve(prob, SDE.ImplicitEM(), callback = CB.PositiveDomain(), maxiters = 10^8)
 
 outx1, outx2, outy1, outy2 = helper.getsol(sol)
 timeidx = helper.gettime(sol, 1000)
 
-# plot x
+# x
 Plots.plot(outx1[timeidx], label = false, color = :black)
 Plots.plot(outx2[timeidx], label = false, color = :black)
 
-# plot y
+# y
 Plots.plot(outy1[timeidx], label = false, color = :black)
 Plots.plot(outy2[timeidx], label = false, color = :black)
 
-# x vs y
+# x vs. y
 Plots.scatter(outx1[timeidx], outy1[timeidx], label = false, color = :black)
 Plots.scatter(outx2[timeidx], outy2[timeidx], label = false, color = :black)
 
