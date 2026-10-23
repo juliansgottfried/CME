@@ -30,15 +30,21 @@ sol = SDE.solve(prob, SDE.ImplicitEM(), callback = CB.PositiveDomain(), maxiters
 outX, outx, outY, outy = helper.getsol(sol)
 timeidx = helper.gettime(sol, 1000)
 
-# X and x
+# X and x series
 Plots.plot(outX[timeidx], label = false, color = :black)
 Plots.plot(outx[timeidx], label = false, color = :black)
-# Plots.plot(outx[timeidx] ./ outX[timeidx], label = false, color = :black)
 
-# Y and y
+# Y and y series
 Plots.plot(outY[timeidx], label = false, color = :black)
 Plots.plot(outy[timeidx], label = false, color = :black)
-# Plots.plot(outy[timeidx] ./ outY[timeidx], ylims = (0, Inf), label = false, color = :black)
+
+# X and x hists
+Plots.histogram(outX[timeidx], label = false, linecolor = :white, color = :black)
+Plots.histogram(outx[timeidx], label = false, linecolor = :white, color = :black)
+
+# Y and y hists
+Plots.histogram(outY[timeidx], label = false, linecolor = :white, color = :black)
+Plots.histogram(outy[timeidx], label = false, linecolor = :white, color = :black)
 
 # X vs. x and Y vs. y
 Plots.scatter(outX[timeidx], outx[timeidx], label = false, color = :black)
@@ -47,9 +53,6 @@ Plots.scatter(outY[timeidx], outy[timeidx], label = false, color = :black)
 # X vs. y and x vs. y
 Plots.scatter(outX[timeidx], outY[timeidx], label = false, color = :black)
 Plots.scatter(outx[timeidx], outy[timeidx], label = false, color = :black)
-
-Ystar = (R0 * pT - η) / R0
-ystar = (m * (1 - η) + R0 * pT) / (pT * f * (m * (1 - η) - η + R0 * pT))
 
 #=
 # check x1 distribution

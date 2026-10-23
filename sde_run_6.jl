@@ -1,6 +1,7 @@
 import StochasticDiffEq as SDE
 import DiffEqCallbacks as CB
-import StatsBase
+import DelimitedFiles as DF
+# import StatsBase
 import Plots
 
 include("sde_functions_6.jl")
@@ -16,7 +17,7 @@ m = κ / K
 
 η = 0.5
 π = 0.05
-R0 = 0.8
+R0 = 1
 
 p = m, pT, f, η, π, R0, K
 
@@ -30,13 +31,21 @@ sol = SDE.solve(prob, SDE.ImplicitEM(), callback = CB.PositiveDomain(), maxiters
 outX, outx, outY, outy = helper.getsol(sol)
 timeidx = helper.gettime(sol, 1000)
 
-# X and x
+# X and x series
 Plots.plot(outX[timeidx], label = false, color = :black)
 Plots.plot(outx[timeidx], label = false, color = :black)
 
-# Y and y
+# Y and y series
 Plots.plot(outY[timeidx], label = false, color = :black)
 Plots.plot(outy[timeidx], label = false, color = :black)
+
+# X and x hists
+Plots.histogram(outX[timeidx], label = false, linecolor = :white, color = :black)
+Plots.histogram(outx[timeidx], label = false, linecolor = :white, color = :black)
+
+# Y and y hists
+Plots.histogram(outY[timeidx], label = false, linecolor = :white, color = :black)
+Plots.histogram(outy[timeidx], label = false, linecolor = :white, color = :black)
 
 # X vs. x and Y vs. y
 Plots.scatter(outX[timeidx], outx[timeidx], label = false, color = :black)
