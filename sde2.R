@@ -129,4 +129,24 @@ kappa <- fit$draws(format = "df") |> pull(kappa) |> mean()
 #     theme_classic() +
 #     theme(text = element_text(size = 12, family = "mono"))
 
+xdat <- hostx[, c("aid", "bin", canons)] |> 
+    left_join(taxon |> select(aid, bin, species), by = c("aid", "bin")) |> 
+    pivot_longer(all_of(canons), names_to = "time", values_to = "x") |> 
+    mutate(x = x / 100) |> 
+    group_by(aid, time, species) |> 
+    summarize(x = sum(x)) |> mutate(x = x / sum(x)) |> 
+    ungroup() |> group_by(species) |> 
+    mutate(xbar = sum(x) / (42 * length(canons))) |> ungroup() |> 
+    filter(xbar > 0) |> mutate(x = x + min(xbar) / 1000) |> 
+    group_by(species) |> 
+    mutate(xbar2 = sum(x) / (42 * length(canons))) |> ungroup() |> 
+    mutate(sp = as.numeric(factor(species))) |> 
+    filter(species %in% c4sp) |> 
+    arrange(species)
+
+xbar <- xdat |> select(species, xbar) |> distinct() |> pull(xbar) |> sum()
+xvar <- xdat |> group_by(aid, time) |> 
+    summarize(x = sum(x)) |> 
+    pull(x) |> var()
+kappa <- (xbar * (1 - xbar) - xvar) / xvar
 
