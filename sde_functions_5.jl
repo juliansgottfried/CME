@@ -83,7 +83,7 @@ function g!(du, u, p, t)
 end
 
 function getsol(sol)
-    outu = (reduce(hcat, [sol.u[i] for i in eachindex(sol.t)])')
+    outu = abs.(reduce(hcat, [sol.u[i] for i in eachindex(sol.t)])')
     (outu[:, 1], outu[:, 2], outu[:, 3], outu[:, 4])
 end
 

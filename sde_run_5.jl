@@ -8,7 +8,7 @@ include("sde_functions_5.jl")
 
 xbar = sort(DF.readdlm("xbar.csv", ','), dims = 1, rev = true)
 pT = sum(xbar)
-p1 = 0.05
+p1 = 0.01
 f = p1 / pT
 
 K = 10^7
@@ -16,8 +16,9 @@ K = 10^7
 m = κ / K
 
 η = 0.5
-π = 0.05
-R0 = 1.0
+π = 0.01
+R0s = [0; 0.6; 0.65; 1.0; 2.0]
+R0 = R0s[3]
 
 p = m, pT, f, η, π, R0, K
 
@@ -54,6 +55,12 @@ Plots.scatter(outY[timeidx], outy[timeidx], label = false, color = :black)
 # X vs. y and x vs. y
 Plots.scatter(outX[timeidx], outY[timeidx], label = false, color = :black)
 Plots.scatter(outx[timeidx], outy[timeidx], label = false, color = :black)
+
+# so: X vs. y
+Plots.scatter(outX[timeidx], outy[timeidx], label = false, color = :black)
+
+# this works
+Plots.histogram(xbar)
 
 #=
 # check x1 distribution
