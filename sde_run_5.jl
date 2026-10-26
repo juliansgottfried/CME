@@ -16,7 +16,7 @@ K = 10^7
 m = κ / K
 
 η = 0.5
-π = 0.01
+π = 0.05
 R0s = [0; 0.6; 0.65; 1.0; 2.0]
 R0 = R0s[3]
 
@@ -31,6 +31,15 @@ sol = SDE.solve(prob, SDE.ImplicitEM(), callback = CB.PositiveDomain(), maxiters
 
 outX, outx, outY, outy = helper.getsol(sol)
 timeidx = helper.gettime(sol, 1000)
+
+# X and Y series
+Plots.plot(outX[timeidx], label = false, color = :black)
+Plots.plot(outY[timeidx], label = false, color = :black)
+
+# x and y series
+Plots.plot(outx[timeidx], label = false, color = :black)
+Plots.plot(outy[timeidx], label = false, color = :black)
+
 
 # X and x series
 Plots.plot(outX[timeidx], label = false, color = :black)
@@ -52,15 +61,15 @@ Plots.histogram(outy[timeidx], label = false, linecolor = :white, color = :black
 Plots.scatter(outX[timeidx], outx[timeidx], label = false, color = :black)
 Plots.scatter(outY[timeidx], outy[timeidx], label = false, color = :black)
 
-# X vs. y and x vs. y
+# X vs. Y and x vs. y
 Plots.scatter(outX[timeidx], outY[timeidx], label = false, color = :black)
 Plots.scatter(outx[timeidx], outy[timeidx], label = false, color = :black)
 
 # so: X vs. y
 Plots.scatter(outX[timeidx], outy[timeidx], label = false, color = :black)
 
-# this works
-Plots.histogram(xbar)
+# examine xbar
+# Plots.histogram(log.(xbar), bins = 50, label = false, linecolor = :white, color = :black)
 
 #=
 # check x1 distribution

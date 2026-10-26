@@ -68,6 +68,7 @@ dat <- NI %>% filter(N > 0) %>%
     mutate(idx = as.numeric(factor(cme, levels = cmes))) %>% 
     select(idx, N, I, cme)
 # dat %>% select(idx, N, I) %>% write_csv("NI.csv", col_names = F)
+dat <- dat |> group_by(cme) |> mutate(mu = mean(N), var = var(N))
 ```
 
 ```{r}

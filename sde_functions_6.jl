@@ -1,15 +1,10 @@
 module helper
 
-tol = 1e-18
-
 μX(X, x, Y, y, m, pT, f, η, π, R0, K) = m * (pT - X)
 μx(X, x, Y, y, m, pT, f, η, π, R0, K) = m * (f * pT - x)
 
-# μY(X, x, Y, y, m, pT, f, η, π, R0, K) = m * (1 - η) * (pT * π - Y) - η * Y + R0 * Y * (X - Y)
-# μy(X, x, Y, y, m, pT, f, η, π, R0, K) = m * (1 - η) * (f * pT * π - y) - η * y + R0 * Y * (x - y)
-
-μY(X, x, Y, y, m, pT, f, η, π, R0, K) = - η * Y + R0 * Y * (X - Y)
-μy(X, x, Y, y, m, pT, f, η, π, R0, K) = - η * y + R0 * Y * (x - y)
+μY(X, x, Y, y, m, pT, f, η, π, R0, K) = R0 * Y * (X - Y) - η * Y
+μy(X, x, Y, y, m, pT, f, η, π, R0, K) = R0 * Y * (x - y) - η * y
 
 sigXX(X, x, Y, y, m, pT, f, η, π, R0, K) = 2X * (1 - X) / K
 sigxx(X, x, Y, y, m, pT, f, η, π, R0, K) = 2x * (1 - x) / K
@@ -24,8 +19,8 @@ sigXY(X, x, Y, y, m, pT, f, η, π, R0, K) = (2 - η) * (1 - X) * Y / K
 sigxy(X, x, Y, y, m, pT, f, η, π, R0, K) = (2 - η) * (1 - x) * y / K
 
 sigXy(X, x, Y, y, m, pT, f, η, π, R0, K) = (2 - η) * (1 - X) * y / K
-# sigxY(X, x, Y, y, m, pT, f, η, π, R0, K) = (2 - η) * (y - x * Y) / K
-sigxY(X, x, Y, y, m, pT, f, η, π, R0, K) = (2 - η) * (1 - x) * Y / K
+sigxY(X, x, Y, y, m, pT, f, η, π, R0, K) = (2 - η) * (y - x * Y) / K
+# sigxY(X, x, Y, y, m, pT, f, η, π, R0, K) = (2 - η) * (1 - x) * Y / K
 
 function f!(du, u, p, t)
     m, pT, f, η, π, R0, K = values(p)
@@ -49,20 +44,20 @@ function g!(du, u, p, t)
     Y = u[3]
     y = u[4]
 
-    sXX = sqrt(max(sigXX(X, x, Y, y, m, pT, f, η, π, R0, K), tol))
-    sYY = sqrt(max(sigYY(X, x, Y, y, m, pT, f, η, π, R0, K), tol))
+    sXX = sigXX(X, x, Y, y, m, pT, f, η, π, R0, K)
+    sYY = sigYY(X, x, Y, y, m, pT, f, η, π, R0, K)
     
-    sxx = sqrt(max(sigxx(X, x, Y, y, m, pT, f, η, π, R0, K), tol))
-    syy = sqrt(max(sigyy(X, x, Y, y, m, pT, f, η, π, R0, K), tol))
+    sxx = sigxx(X, x, Y, y, m, pT, f, η, π, R0, K)
+    syy = sigyy(X, x, Y, y, m, pT, f, η, π, R0, K)
    
-    sXx = sqrt(max(sigXx(X, x, Y, y, m, pT, f, η, π, R0, K), tol))
-    sYy = sqrt(max(sigYy(X, x, Y, y, m, pT, f, η, π, R0, K), tol))
+    sXx = sigXx(X, x, Y, y, m, pT, f, η, π, R0, K)
+    sYy = sigYy(X, x, Y, y, m, pT, f, η, π, R0, K)
 
-    sXY = sqrt(max(sigXY(X, x, Y, y, m, pT, f, η, π, R0, K), tol))
-    sxy = sqrt(max(sigxy(X, x, Y, y, m, pT, f, η, π, R0, K), tol))
+    sXY = sigXY(X, x, Y, y, m, pT, f, η, π, R0, K)
+    sxy = sigxy(X, x, Y, y, m, pT, f, η, π, R0, K)
 
-    sXy = sqrt(max(sigXy(X, x, Y, y, m, pT, f, η, π, R0, K), tol))
-    sxY = sqrt(max(sigxY(X, x, Y, y, m, pT, f, η, π, R0, K), tol))
+    sXy = sigXy(X, x, Y, y, m, pT, f, η, π, R0, K)
+    sxY = sigxY(X, x, Y, y, m, pT, f, η, π, R0, K)
 
     du[1, 1] = sXX
     du[1, 2] = sXx
@@ -83,6 +78,8 @@ function g!(du, u, p, t)
     du[4, 2] = sxy
     du[4, 3] = sYy
     du[4, 4] = syy
+
+    du .= real.(sqrt(du))
 end
 
 function getsol(sol)

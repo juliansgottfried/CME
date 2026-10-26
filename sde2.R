@@ -88,9 +88,9 @@ xdat <- hostx[, c("aid", "bin", canons)] |>
     select(sp, species, x, xbar, xbar2)
 
 xdat |>
-    ggplot(aes(x = xbar)) +
+    ggplot(aes(x = (xbar))) +
     geom_histogram(color = "white", fill = "black", bins = 100) +
-    theme_classic() +
+    theme_classic() + xlab("p") +
     theme(text = element_text(size = 12, family = "mono"))
 
 dat <- list(n_obs = nrow(xdat),
@@ -105,13 +105,13 @@ fit <- mod$sample(
     parallel_chains = 4,
     refresh = 500)
 
+kappa <- fit$draws(format = "df") |> pull(kappa) |> mean()
 fit$draws(format = "df") |> select(kappa) |> 
     ggplot(aes(x = kappa)) +
     geom_density() +
-    theme_classic() +
+    theme_classic() + xlab("Km") +
+    geom_vline(xintercept = kappa, linetype = 4, color = "red") +
     theme(text = element_text(size = 12, family = "mono"))
-
-kappa <- fit$draws(format = "df") |> pull(kappa) |> mean()
 
 # xdat |> select(species, xbar) |> 
 #     filter(species %in% c4sp) |> distinct() |> 
@@ -121,8 +121,8 @@ kappa <- fit$draws(format = "df") |> pull(kappa) |> mean()
 # longx <- outx |> pivot_longer(everything(), names_to = "sp", values_to = "x")
 # longy <- outy |> pivot_longer(everything(), names_to = "sp", values_to = "y")
 # plotter <- cbind(longx, y = longy$y) |>
-#     group_by(sp) |> summarize(p0 = mean(x < 0.0001 | y < 0.0001)) |> 
-#     ungroup() |> mutate(sp = as.numeric(str_remove(sp, "V"))) |> 
+#     group_by(sp) |> summarize(p0 = mean(x < 0.0001 | y < 0.0001)) |>
+#     ungroup() |> mutate(sp = as.numeric(str_remove(sp, "V"))) |>
 #     arrange(sp) |> mutate(xbar = xbar)
 # plotter |> ggplot(aes(x = xbar, y = p0)) +
 #     geom_point() +
@@ -150,3 +150,17 @@ xvar <- xdat |> group_by(aid, time) |>
     pull(x) |> var()
 kappa <- (xbar * (1 - xbar) - xvar) / xvar
 
+
+R0s <- seq(from = 0.001, to = 5, by = 0.001)
+p <- 0.57
+shape1 <-  kappa * p
+shape2 <-  kappa * (1 - p)
+data.frame(R0 = R0s, 
+           prob = pbeta(1/R0s, shape1 = shape1, shape2 = shape2, lower.tail = F)) |> 
+    ggplot(aes(x = R0, y = prob)) +
+    geom_line() +
+    geom_vline(xintercept = (shape1 + shape2 - 2) / (shape1 - 1), color = "red", linetype = 4) +
+    theme_classic() + xlab("R0") + ylab("P(y > 0)") +
+    theme(text = element_text(size = 12, family = "mono"))
+
+          

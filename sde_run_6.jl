@@ -1,22 +1,24 @@
 import StochasticDiffEq as SDE
 import DiffEqCallbacks as CB
 import DelimitedFiles as DF
+import StatsBase
 import Plots
 
 include("sde_functions_6.jl")
 
 xbar = sort(DF.readdlm("xbar.csv", ','), dims = 1, rev = true)
 pT = sum(xbar)
-p1 = 0.05
+p1 = 0.01
 f = p1 / pT
 
 K = 10^7
-κ = 21.4
+κ = 145.344
 m = κ / K
 
 η = 0.5
 π = 0.05
-R0 = 1.0
+R0s = [0; 0.6; 0.65; 1.0; 2.0]
+R0 = 0.8
 
 p = m, pT, f, η, π, R0, K
 
@@ -30,13 +32,19 @@ sol = SDE.solve(prob, SDE.ImplicitEM(), callback = CB.PositiveDomain(), maxiters
 outX, outx, outY, outy = helper.getsol(sol)
 timeidx = helper.gettime(sol, 1000)
 
+Ystar = max.(outX[timeidx] .- η ./ R0, 0)
+ystar = Ystar .* outx[timeidx] ./ outX[timeidx]
+
 # X and x series
 Plots.plot(outX[timeidx], label = false, color = :black)
 Plots.plot(outx[timeidx], label = false, color = :black)
 
 # Y and y series
 Plots.plot(outY[timeidx], label = false, color = :black)
+Plots.plot(Ystar, label = false, color = :black)
+
 Plots.plot(outy[timeidx], label = false, color = :black)
+Plots.plot(ystar, label = false, color = :black)
 
 # X and x hists
 Plots.histogram(outX[timeidx], label = false, linecolor = :white, color = :black)

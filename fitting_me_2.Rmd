@@ -249,7 +249,7 @@ fits %>% filter(!(R0l == min(R0) & R0u == max(R0))) %>%
 
 ## Examining specific CMEs
 ```{r}
-tester <- "c2252"
+tester <- "c4"
 testpar <- fits %>% filter(cme == tester) %>% select(R0 = R0m, pi = pim)
 
 plotcounts <- load(which.max(unlist(lapply(pluginlist, \(x) sum(x == tester)))))
