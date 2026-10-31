@@ -1,8 +1,8 @@
 data {
     int n_sub;
-    int n_sp;
-    array[n_sub] row_vector[n_sp] x;
-    simplex[n_sp] p;
+    int n_bin;
+    array[n_sub] row_vector[n_bin] x;
+    simplex[n_bin] p;
 }
 
 parameters {
