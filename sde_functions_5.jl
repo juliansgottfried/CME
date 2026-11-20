@@ -1,26 +1,32 @@
 module helper
 
-μX(X, x, Y, y, m, pT, f, η, π, R0, K) = m * (pT - X)
-μx(X, x, Y, y, m, pT, f, η, π, R0, K) = m * (f * pT - x)
+import StochasticDiffEq as SDE
+import DiffEqCallbacks as CB
 
-μY(X, x, Y, y, m, pT, f, η, π, R0, K) = m * (1 - η) * (pT * π - Y) - η * Y + R0 * Y * (X - Y)
-μy(X, x, Y, y, m, pT, f, η, π, R0, K) = m * (1 - η) * (f * pT * π - y) - η * y + R0 * Y * (x - y)
+μX(X, x, Y, y, m, pT, f, η, π, R0, K) = K * m * (pT - X)
+μx(X, x, Y, y, m, pT, f, η, π, R0, K) = K * m * (f * pT - x)
 
-sigXX(X, x, Y, y, m, pT, f, η, π, R0, K) = (2X * (1 - X) + m * (1 - 2X) * (pT - X)) / K
-sigxx(X, x, Y, y, m, pT, f, η, π, R0, K) = (2x * (1 - x) + m * (1 - 2x) * (f * pT - x)) / K
+μY(X, x, Y, y, m, pT, f, η, π, R0, K) = K * (m * (1 - η) * (pT * π - Y) - η * Y + R0 * Y * (X - Y))
+μy(X, x, Y, y, m, pT, f, η, π, R0, K) = K * (m * (1 - η) * (f * pT * π - y) - η * y + R0 * Y * (x - y))
+# μy(X, x, Y, y, m, pT, f, η, π, R0, K) = K * (m * (1 - η) * (f * pT * π - y) - η * y + R0 * 0.21766751876113333 * (x - y))
 
-sigYY(X, x, Y, y, m, pT, f, η, π, R0, K) = (2Y * (1 - η/2 - Y * (1 - η)) + m * (1 - η) * (1 - 2Y) * (pT * π - Y) + R0 * Y * (X - Y)) / K
-sigyy(X, x, Y, y, m, pT, f, η, π, R0, K) = (2y * (1 - η/2 - y * (1 - η)) + m * (1 - η) * (1 - 2y) * (f * pT * π - y) + R0 * Y * (x - y)) / K
+sigXX(X, x, Y, y, m, pT, f, η, π, R0, K) = (2X * (1 - X) + m * (1 - 2X) * (pT - X))
+sigxx(X, x, Y, y, m, pT, f, η, π, R0, K) = (2x * (1 - x) + m * (1 - 2x) * (f * pT - x))
 
-sigXx(X, x, Y, y, m, pT, f, η, π, R0, K) = -(m * pT * (x - f * (1 - X)) - x * ((1 - m) * (1 - 2X) + 1)) / K
-sigYy(X, x, Y, y, m, pT, f, η, π, R0, K) = -(m * pT * π * (1 - η) * (y - f * (1 - Y)) - y * (1 - η) * ((1 - m) * (1 - 2Y) + 1) - R0 * Y * (x - y)) / K
+sigYY(X, x, Y, y, m, pT, f, η, π, R0, K) = (2Y * (1 - η/2 - Y * (1 - η)) + m * (1 - η) * (1 - 2Y) * (pT * π - Y) + R0 * Y * (X - Y))
+sigyy(X, x, Y, y, m, pT, f, η, π, R0, K) = (2y * (1 - η/2 - y * (1 - η)) + m * (1 - η) * (1 - 2y) * (f * pT * π - y) + R0 * Y * (x - y))
+# sigyy(X, x, Y, y, m, pT, f, η, π, R0, K) = (2y * (1 - η/2 - y * (1 - η)) + m * (1 - η) * (1 - 2y) * (f * pT * π - y) + R0 * 0.21766751876113333 * (x - y))
 
-sigXY(X, x, Y, y, m, pT, f, η, π, R0, K) = (m * ((1 - η) * (1 - X) * (pT * π - Y) - Y * (pT - X)) + (2 - η) * (1 - X) * Y) / K
-sigxy(X, x, Y, y, m, pT, f, η, π, R0, K) = (m * ((1 - η) * (1 - x) * (f * pT * π - y) - y * (f * pT - x)) + (2 - η) * (1 - x) * y) / K
+sigXx(X, x, Y, y, m, pT, f, η, π, R0, K) = -(m * pT * (x - f * (1 - X)) - x * ((1 - m) * (1 - 2X) + 1))
+sigYy(X, x, Y, y, m, pT, f, η, π, R0, K) = -(m * pT * π * (1 - η) * (y - f * (1 - Y)) - y * (1 - η) * ((1 - m) * (1 - 2Y) + 1) - R0 * Y * (x - y))
+# sigYy(X, x, Y, y, m, pT, f, η, π, R0, K) = -(m * pT * π * (1 - η) * (y - f * (1 - Y)) - y * (1 - η) * ((1 - m) * (1 - 2Y) + 1) - R0 * 0.21766751876113333 * (x - y))
 
-sigXy(X, x, Y, y, m, pT, f, η, π, R0, K) = (m * ((1 - η) * (1 - X) * (f * pT * π - y) - y * (pT - X)) + (2 - η) * (1 - X) * y) / K
-sigxY(X, x, Y, y, m, pT, f, η, π, R0, K) = (m * (1 - η) * ((f * pT * π - y - x * (pT * π - Y) - Y * (f * pT - x)) + (2 - η) * (y - x * Y))) / K
-# sigxY(X, x, Y, y, m, pT, f, η, π, R0, K) = (m * ((1 - η) * (1 - x) * (pT * π - Y) - Y * (f * pT - x)) + (2 - η) * (1 - x) * Y) / K
+sigXY(X, x, Y, y, m, pT, f, η, π, R0, K) = (m * ((1 - η) * (1 - X) * (pT * π - Y) - Y * (pT - X)) + (2 - η) * (1 - X) * Y)
+sigxy(X, x, Y, y, m, pT, f, η, π, R0, K) = (m * ((1 - η) * (1 - x) * (f * pT * π - y) - y * (f * pT - x)) + (2 - η) * (1 - x) * y)
+# sigxy(X, x, Y, y, m, pT, f, η, π, R0, K) = 0
+
+sigXy(X, x, Y, y, m, pT, f, η, π, R0, K) = (m * ((1 - η) * (1 - X) * (f * pT * π - y) - y * (pT - X)) + (2 - η) * (1 - X) * y)
+sigxY(X, x, Y, y, m, pT, f, η, π, R0, K) = (m * (1 - η) * ((f * pT * π - y - x * (pT * π - Y) - Y * (f * pT - x)) + (2 - η) * (y - x * Y)))
 
 function f!(du, u, p, t)
     m, pT, f, η, π, R0, K = values(p)
@@ -92,6 +98,20 @@ function gettime(sol, J)
     stepper = div(T, J) == 0 ? 1 : div(T, J)
     min(div(T, 2), J):stepper:T
     # 1:stepper:T
+end
+
+function sim1xi(m, pT, p1, η, π, R0, K)
+    f = p1 / pT
+    p = m, pT, f, η, π, R0, K
+    u0 = [pT; p1; pT * π; p1 * π]
+
+    prob = SDE.SDEProblem(f!, g!, 
+        u0, (0.0, 100), p,
+        noise_rate_prototype = ones(Float64, 4, 4))
+    sol = SDE.solve(prob, SDE.ImplicitEM(), callback = CB.PositiveDomain(), maxiters = 10^8)
+
+    outX, outx, outY, outy = getsol(sol)
+    [outx;; outy]
 end
 
 end
