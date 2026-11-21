@@ -24,6 +24,7 @@ function gloop!(du, S, s11, s22, s12)
         idx = 2(i - 1)
         du[idx .+ (1:2), idx + 1] .= [s11[i]; s12[i]]
         du[idx .+ (1:2), idx + 2] .= [s12[i]; s22[i]]
+        @views du[idx .+ (1:2), idx .+ (1:2)] .= real.(sqrt(du[idx .+ (1:2), idx .+ (1:2)]))
     end    
 end
 
@@ -31,7 +32,6 @@ function g!(du, u, p, t)
     S, __ = values(p)
     x, y = load(u, S)
     gloop!(du, S, σxx(x), σyy(y), σxy(x, y))
-    du .= real.(sqrt(du))
 end
 
 function setA(S)
