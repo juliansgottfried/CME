@@ -5,10 +5,10 @@ import Plots
 
 include("sde_functions_7.jl")
 
-xbar = DF.readdlm("xbar.csv", ',')
+xbardat = DF.readdlm("xbar.csv", ',')
 
-S = 50
-xbar = xbar[1:S]
+S = 94
+xbar = xbardat[1:S]
 κ = 117
 π = 0.0455
 R0 = 100
