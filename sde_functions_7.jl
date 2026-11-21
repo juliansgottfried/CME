@@ -1,5 +1,9 @@
 module helper
 
+import StochasticDiffEq as SDE
+import DiffEqCallbacks as CB
+import DelimitedFiles as DF
+
 μx(x, xbar, κ) = @. κ * (xbar - x)
 μy(x, y, Y, xbar, κ, π, R0, η) = @. κ * (xbar * π - y) - η * y + R0 * Y * (x - y)
 
@@ -49,13 +53,40 @@ end
 
 function getsol(sol, S)
     outu = (reduce(hcat, [sol.u[i] for i in eachindex(sol.t)])')
-    (outu[:, 1:2:2S], outu[:, 2:2:2S])
+    outx = outu[:, 1:2:2S]
+    outy = outu[:, 2:2:2S]
+
+    # outx[outx .> 1] .= 1
+    # outx[outx .< 0] .= 0
+    # outy[outy .> outx] .= outx[outy .> outx]
+    # outy[outy .< 0] .= 0
+
+    (outx, outy)
 end
 
 function gettime(sol, J)
     T = size(sol.t)[1]
     stepper = div(T, J) == 0 ? 1 : div(T, J)
     min(div(T, 2), J):stepper:T
+end
+
+function runner(i, S, xbar, κ, π, R0s, η)
+    p = (S, xbar, κ, π, R0s[i], η)
+
+    x0 = xbar
+    y0 = zeros(Float64, S)
+    u0 = makeu0(x0, y0)
+
+    prob = SDE.SDEProblem(helper.f!, helper.g!,
+        u0, (0.0, 10.0), p, noise_rate_prototype = setA(S))
+    sol = SDE.solve(prob, SDE.ImplicitEM(),
+        callback = CB.PositiveDomain())
+
+    outx, outy = helper.getsol(sol, S)
+    timeidx = helper.gettime(sol, 42)
+
+    DF.writedlm("simulations/x_$i.csv", outx[timeidx, :], ',')
+    DF.writedlm("simulations/y_$i.csv", outy[timeidx, :], ',')
 end
 
 end

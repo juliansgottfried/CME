@@ -171,3 +171,38 @@ mod <- cmdstan_model("mvn.stan")
 ret <- data.frame(sapply("c4", fit_R0))
 write_csv(ret, "ret.csv")
 ret <- read_csv("ret.csv")
+
+
+
+# sims
+R0s <- 2 ^ (0:10)
+sim <- data.frame(matrix(0, ncol = 42 + 3, nrow = 94 * 11 * 2))
+colnames(sim)[43:45] <- c("state", "bin", "R0")
+for (i in 1:11) {
+    idxx <- (1:94) + 94 * 2 * (i - 1)
+    idxy <- (95:188) + 94 * 2 * (i - 1)
+
+    sim[idxx, 1:42] <- t(read_csv(paste0("simulations/x_", i, ".csv"), col_names = F))
+    sim$state[idxx] <- "x"
+    sim$bin[idxx] <- 1:94
+    sim$R0[idxx] <- R0s[i]
+    
+    sim[idxy, 1:42] <- t(read_csv(paste0("simulations/y_", i, ".csv"), col_names = F))
+    sim$state[idxy] <- "y"
+    sim$bin[idxy] <- 1:94
+    sim$R0[idxy]<- R0s[i]
+}
+simproc <- sim |> pivot_longer(starts_with("X"), names_to = "aid", values_to = "val") |> 
+    mutate(aid = as.numeric(str_remove(aid, "X"))) |> 
+    pivot_wider(id_cols = c(aid, bin, R0), names_from = "state", values_from = "val")
+datdata <- data.frame(aid = dat$aid, bin = dat$bin, mu = dat$mu, phi = dat$phi) |> 
+    distinct()
+simproc <- simproc |> left_join(datdata, by = c("bin", "aid")) |> 
+    na.omit() |> filter(x > min(dat$x))
+simproc$z <- simproc$y / simproc$x
+simproc$z <- 1 / (1 + exp(-20 * (simproc$z - 0.5)))
+simproc$R <- with(simproc, rnbinom(nrow(simproc), mu = mu * z, size = phi))
+simstat <- simproc |> group_by(aid, R0) |> summarize(stat = sum(R > 0)) |> ungroup()
+simstat |> filter(R0 == 1) |> pull(stat) |> table() |> plot()
+
+
