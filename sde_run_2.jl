@@ -7,6 +7,7 @@ import DelimitedFiles as DF
 include("sde_functions_2.jl")
 
 xbar = sort(DF.readdlm("xbar.csv", ','), dims = 1, rev = true)
+xbar = xbar[1:20]
 
 S = size(xbar)[1]
 
@@ -14,8 +15,8 @@ K = 10^7
 κ = 134.8684
 m = κ / K
 
-R0 = 0.5
-η = 0.5
+R0 = m
+η = m
 π = 0.05
 
 p = (S, K, m, xbar, R0, η, π)
@@ -25,7 +26,7 @@ y0 = π * xbar
 u0 = helper.makeu0(x0, y0)
 
 prob = SDE.SDEProblem(helper.f!, helper.g!,
-    u0, (0.0, 10^6), p, noise_rate_prototype = helper.setA(S))
+    u0, (0.0, 10^7), p, noise_rate_prototype = helper.setA(S))
 # sol = SDE.solve(prob, SDE.LambaEM(), maxiters = 10^7)
 # sol = SDE.solve(prob, SDE.LambaEM(), maxiters = 10^7)
 # sol = SDE.solve(prob, SDE.SOSRA(), 
