@@ -87,17 +87,18 @@ fit_R0 <- function(cme) {
         chains = 4,
         iter_warmup = 1000,
         iter_sampling = 1000,
-        parallel_chains = 4,
+        parallel_chains = 4, 
+        fixed_param = T)
         # init = list(
         #     list(R0 = 5, a = 10),
         #     list(R0 = 4, a = 15),
         #     list(R0 = 3, a = 20),
         #     list(R0 = 2, a = 25)))
-        init = list(
-            list(R0 = 2, a = 15, eta = 0.033),
-            list(R0 = 3, a = 20, eta = 0.067),
-            list(R0 = 4, a = 25, eta = 0.1),
-            list(R0 = 5, a = 30, eta = 0.133)))
+        # init = list(
+        #     list(R0 = 2, a = 15, eta = 0.033),
+        #     list(R0 = 3, a = 20, eta = 0.067),
+        #     list(R0 = 4, a = 25, eta = 0.1),
+        #     list(R0 = 5, a = 30, eta = 0.133)))
     
     mcmc_trace(fit$draws(format = "df", variables = "R0")) + theme_classic()
     mcmc_trace(fit$draws(format = "df", variables = "eta")) + theme_classic()
@@ -175,34 +176,42 @@ ret <- read_csv("ret.csv")
 
 
 # sims
-R0s <- 2 ^ (0:10)
-sim <- data.frame(matrix(0, ncol = 42 + 3, nrow = 94 * 11 * 2))
-colnames(sim)[43:45] <- c("state", "bin", "R0")
-for (i in 1:11) {
-    idxx <- (1:94) + 94 * 2 * (i - 1)
-    idxy <- (95:188) + 94 * 2 * (i - 1)
+nR0 <- 1
+naid <- 100
+keep <- which(dat$p > 0.005)
+nbin <- length(keep)
+R0s <- c(0, 2 ^ (0:10))[nR0]
+sim <- data.frame(matrix(0, ncol = naid + 3, nrow = nbin * nR0 * 2))
+colnames(sim)[(naid + 1):(naid + 3)] <- c("state", "bin", "R0")
+for (i in 1:nR0) {
+    idxx <- (1:nbin) + nbin * 2 * (i - 1)
+    idxy <- ((nbin + 1):(2 * nbin)) + nbin * 2 * (i - 1)
 
-    sim[idxx, 1:42] <- t(read_csv(paste0("simulations/x_", i, ".csv"), col_names = F))
+    sim[idxx, 1:naid] <- t(read_csv(paste0("simulations/x_", i, ".csv"), col_names = F))
     sim$state[idxx] <- "x"
-    sim$bin[idxx] <- 1:94
+    sim$bin[idxx] <- keep
     sim$R0[idxx] <- R0s[i]
     
-    sim[idxy, 1:42] <- t(read_csv(paste0("simulations/y_", i, ".csv"), col_names = F))
+    sim[idxy, 1:naid] <- t(read_csv(paste0("simulations/y_", i, ".csv"), col_names = F))
     sim$state[idxy] <- "y"
-    sim$bin[idxy] <- 1:94
+    sim$bin[idxy] <- keep
     sim$R0[idxy]<- R0s[i]
 }
-simproc <- sim |> pivot_longer(starts_with("X"), names_to = "aid", values_to = "val") |> 
-    mutate(aid = as.numeric(str_remove(aid, "X"))) |> 
-    pivot_wider(id_cols = c(aid, bin, R0), names_from = "state", values_from = "val")
+simproc <- sim |> select(-R0) |> 
+    pivot_longer(starts_with("X"), names_to = "aid", values_to = "val") |> 
+    mutate(aid = as.numeric(str_remove(aid, "X"))) |>
+    # pivot_wider(id_cols = c(aid, bin, R0), names_from = "state", values_from = "val") |> 
+    pivot_wider(id_cols = c(aid, bin), names_from = "state", values_from = "val") |> 
+    filter(x > min(dat$x))
 datdata <- data.frame(aid = dat$aid, bin = dat$bin, mu = dat$mu, phi = dat$phi) |> 
-    distinct()
-simproc <- simproc |> left_join(datdata, by = c("bin", "aid")) |> 
-    na.omit() |> filter(x > min(dat$x))
+    distinct() |> filter(bin %in% keep)
+simproc <- simproc |> left_join(datdata, by = c("bin", "aid")) |> na.omit()
 simproc$z <- simproc$y / simproc$x
 simproc$z <- 1 / (1 + exp(-20 * (simproc$z - 0.5)))
 simproc$R <- with(simproc, rnbinom(nrow(simproc), mu = mu * z, size = phi))
-simstat <- simproc |> group_by(aid, R0) |> summarize(stat = sum(R > 0)) |> ungroup()
-simstat |> filter(R0 == 1) |> pull(stat) |> table() |> plot()
-
-
+simstat <- simproc |> 
+    # group_by(aid, R0) |> 
+    group_by(aid) |> 
+    summarize(stat = sum(R > 0)) |> ungroup()
+# simstat |> filter(R0 == 1) |> pull(stat) |> table() |> plot()
+simstat |> pull(stat) |> table() |> plot()

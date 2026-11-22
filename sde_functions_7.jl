@@ -1,7 +1,6 @@
 module helper
 
 import StochasticDiffEq as SDE
-import DiffEqCallbacks as CB
 import DelimitedFiles as DF
 
 μx(x, xbar, κ) = @. κ * (xbar - x)
@@ -78,9 +77,8 @@ function runner(i, S, xbar, κ, π, R0s, η)
     u0 = makeu0(x0, y0)
 
     prob = SDE.SDEProblem(helper.f!, helper.g!,
-        u0, (0.0, 10.0), p, noise_rate_prototype = setA(S))
-    sol = SDE.solve(prob, SDE.ImplicitEM(),
-        callback = CB.PositiveDomain())
+        u0, (0.0, 1.0), p, noise_rate_prototype = setA(S))
+    sol = SDE.solve(prob, SDE.ImplicitEM())
 
     outx, outy = helper.getsol(sol, S)
     timeidx = helper.gettime(sol, 42)

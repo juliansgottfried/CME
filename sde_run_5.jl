@@ -19,7 +19,7 @@ m = κ / K
 π = 0.0454943
 
 η = m
-R0 = 5m
+R0 = m/κ
 
 p = m, pT, f, η, π, R0, K
 
@@ -63,10 +63,12 @@ Plots.scatter(xsample, ysample,  alpha = 0.1, xlims = (0, 0.05), ylims = (0, 0.0
 # X and Y series
 Plots.plot(outX[timeidx], label = false, color = :black)
 Plots.plot(outY[timeidx], label = false, color = :black)
+Plots.plot(outY[timeidx] ./ outX[timeidx], label = false, color = :black)
 
 # x and y series
 Plots.plot(outx[timeidx], label = false, color = :black)
 Plots.plot(outy[timeidx], label = false, color = :black)
+Plots.plot(outy[timeidx] ./ outx[timeidx], label = false, color = :black, ylims = (0, 1))
 
 # X and x series
 Plots.plot(outX[timeidx], label = false, color = :black)
