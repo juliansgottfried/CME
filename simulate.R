@@ -79,37 +79,45 @@ runner <- function(f, R0, eta) {
     thetac <- with(dat, 1 - exp(phi * (log(phi) - log(mu * z + phi))))
     
     ret <- rep(0, dat$naid)
+    ret2 <- rep(0, dat$naid)
     pos = 1
     
-    for (i in 1:dat$naid) {
-        ret[i] = mean(poisbinom::rpoisbinom(1000, thetac[pos:(pos + dat$s[i] - 1)]) == 0)
-        pos = pos + dat$s[i]
-    }
-    mean(ret)
-    
     # for (i in 1:dat$naid) {
-    #     ret[i] = poisbinom::rpoisbinom(1, thetac[pos:(pos + dat$s[i] - 1)])
+    #     hold <- poisbinom::rpoisbinom(1000, thetac[pos:(pos + dat$s[i] - 1)])
+    #     ret1[i] = mean(hold == 0)
+    #     ret2[i] = mean(hold == 1)
     #     pos = pos + dat$s[i]
     # }
-    # plot(table(ret))
+    # c(mean(ret), mean(ret2))
+    
+    for (i in 1:dat$naid) {
+        ret[i] = poisbinom::rpoisbinom(1, thetac[pos:(pos + dat$s[i] - 1)])
+        pos = pos + dat$s[i]
+    }
+    plot(table(ret))
     
     # mean(z)
 }
 
-target <- 0.45238095
+target0 <- round(0.45238095, 2)
+target1 <- round(0.19047619, 2)
 f <- 0.045
-R0s <- seq(from = 0.0001, to = 1000000, length.out = 30)
-etas <- seq(from = 0.0001, to = 1000000, length.out = 30)
+R0s <- seq(from = 100, to = 1000000, length.out = 30)
+etas <- seq(from = 100, to = 1000000, length.out = 30)
 grid <- expand.grid(f, R0s, etas)
-ret <- cbind(grid, (apply(grid, 1, \(x) runner(x[1], x[2], x[3]))))
-colnames(ret) <- c("f", "R0", "eta", "plot")
-ret |> filter(!is.na(plot) & !is.infinite(plot)) |>
-    group_by(eta, R0) |> summarize(plot = mean(plot)) |>
-    ggplot(aes(x = eta, y = R0, fill = plot, alpha = round(plot, 1) > round(target, 1))) +
+ret <- cbind(grid, t(apply(grid, 1, \(x) runner(x[1], x[2], x[3]))))
+colnames(ret) <- c("f", "R0", "eta", "p0", "p1")
+ret$keep <- round(ret$p0, 2) >= target0 & round(ret$p1, 2) >= target1
+ret |> filter(!is.na(p0) & !is.infinite(p0)) |>
+    ggplot(aes(x = eta, y = R0, fill = 100*p0, alpha = keep)) +
     geom_tile() +
-    scale_fill_viridis_c(option = 15) +
-    scale_alpha_manual(values = c(0.1, 1), name = "match") +
-    theme_classic()
+    scale_fill_viridis_c(option = 15, name = "%0") +
+    scale_alpha_manual(values = c(0.5, 1), name = "match") +
+    geom_abline(slope = 1/dat$P, color = "black", 
+                linetype = 2, linewidth = 1) +
+    guides(alpha = "none") +
+    theme_classic() +
+    theme(text = element_text(size = 12, family = "mono"))
 
 # ret |> filter(!is.na(var) & !is.infinite(var)) |> 
 #     group_by(R0, f) |> summarize(var = mean(var)) |> 
