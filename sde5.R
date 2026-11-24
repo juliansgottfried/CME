@@ -17,7 +17,7 @@ create_dat <- function(cme) {
     # filt <- rbind(filt, otherfilt)
     
     M <- filt |> group_by(host_bin) |>
-        summarize(M = max(M)) |> ungroup() 
+        summarize(M = median(M)) |> ungroup() 
     
     xs <- x |> filter(host_bin %in% bins)
     
@@ -68,7 +68,7 @@ create_dat <- function(cme) {
          mu = all$M * all$xcov,
          phi = all$M * all$xcov ^ 2 / (all$xvar - all$xcov),
          X = X,
-         # R = all$R,
+         R = all$R,
          kappa = kappa,
          P = sum(p),
          f = c4pi,
@@ -87,33 +87,26 @@ fit_R0 <- function(cme) {
         chains = 4,
         iter_warmup = 1000,
         iter_sampling = 1000,
-        parallel_chains = 4, 
+        parallel_chains = 4,
+        # init = list(
+        #     list(R0 = 0.5, eta = 95),
+        #     list(R0 = 1.5, eta = 105),
+        #     list(R0 = 2.5, eta = 110),
+        #     list(R0 = 3.5, eta = 115)))
         fixed_param = T)
         # init = list(
-        #     list(R0 = 5, a = 10),
-        #     list(R0 = 4, a = 15),
-        #     list(R0 = 3, a = 20),
-        #     list(R0 = 2, a = 25)))
-        # init = list(
-        #     list(R0 = 2, a = 15, eta = 0.033),
-        #     list(R0 = 3, a = 20, eta = 0.067),
-        #     list(R0 = 4, a = 25, eta = 0.1),
-        #     list(R0 = 5, a = 30, eta = 0.133)))
+        #     list(f = 0.005, R0 = 3, eta = 3),
+        #     list(f = 0.01, R0 = 4, eta = 4),
+        #     list(f = 0.015, R0 = 5, eta = 5),
+        #     list(f = 0.02, R0 = 6, eta = 6)))
     
+    # mcmc_trace(fit$draws(format = "df", variables = "f")) + theme_classic()
     mcmc_trace(fit$draws(format = "df", variables = "R0")) + theme_classic()
     mcmc_trace(fit$draws(format = "df", variables = "eta")) + theme_classic()
-    mcmc_trace(fit$draws(format = "df", variables = "a")) + theme_classic()
+
+    # fit$draws(format = "df") |> pull(R0) |> mean()
     
-    # data.frame(fit$draws(format = "df")) |> select(R0, eta) |>
-    #     pivot_longer(everything(), names_to = "par", values_to = "posterior") |> 
-    #     mutate(prior = c(rgamma(4000, shape = 100, rate = 1),
-    #                      rgamma(4000, shape = 1, rate = 1))[rep(1:4000, each = 2) + rep(c(0, 4000), 4000)]) |> 
-    #     pivot_longer(-par) |> 
-    #     ggplot(aes(x = value, fill = name)) +
-    #     geom_density(color = "white", alpha = 0.8) + 
-    #     scale_fill_manual(values = c("#4287f5", "#ea9afc"), name = "") +
-    #     facet_wrap(~par, scales = "free") +
-    #     theme_classic()
+    GGally::ggpairs(fit$draws(format = "df") |> select(R0, eta))
     
     realtab <- data.frame(R = dat$R, aid = dat$aid) |> 
         group_by(aid) |> summarize(X = sum(R > 0)) |>
@@ -124,47 +117,9 @@ fit_R0 <- function(cme) {
     statsimtab <- fit$draws(format = "df") |> 
         select(starts_with("stat_sim[")) |>
         t() |> as.data.frame() |> 
-        apply(1, \(x) table(factor(x, levels = 0:22))) |> 
+        apply(1, \(x) table(factor(x, levels = 0:99))) |> 
         rowSums()
     plot(statsimtab / sum(statsimtab), type = "h")
-    
-    data.frame(data = as.numeric(realtab / sum(realtab)),
-               sim = as.numeric(statsimtab / sum(statsimtab)),
-               bin = 0:22) |> 
-        pivot_longer(-bin) |> 
-        mutate(name = factor(name, levels = c("data", "sim"))) |> 
-        arrange(desc(name)) |> 
-        ggplot(aes(x = bin, y = value, fill = name)) + 
-        geom_col(position = "identity", alpha = 1) +
-        scale_fill_manual(name = "", values = c("#4287f5", "black")) +
-        theme_classic() +
-        theme(text = element_text(size = 12, family = "mono"))
-    
-    realR <- table(dat$R)
-    realR <- realR[realR > 1]
-    plot(log(realR / min(realR)))
-    
-    rsims <- fit$draws(format = "df") |> 
-        select(starts_with("R_sim[")) |>
-        t() |> as.data.frame()
-    simtabs <- apply(rsims, 2, \(x) {
-        table(factor(x, levels = 0:36))
-    })
-    plot(log(rowSums(simtabs) / min(rowSums(simtabs))), type = "h")
-    
-    realtab <- data.frame(R = dat$R, aid = dat$aid) |> 
-        group_by(aid) |> summarize(X = sum(R > 0)) |>
-        mutate(X = factor(X, levels = 0:22)) |> 
-        pull(X) |> table()
-    plot(realtab / sum(realtab))
-    
-    transfrsims <- rsims |> cbind(aid = dat$aid) |>
-        group_by(aid) |> summarize_at(vars(starts_with("V")), \(x) sum(x > 0)) |>
-        select(-aid) |> as.matrix()
-    transsimtabs <- apply(transfrsims, 2, \(x) {
-        table(factor(x, levels = 0:22))
-        })
-    plot(rowSums(transsimtabs) / sum(transsimtabs), type = "h")
 }
 
 mod <- cmdstan_model("mvn.stan")
@@ -176,38 +131,38 @@ ret <- read_csv("ret.csv")
 
 
 # sims
-nR0 <- 1
+R0range <- 1:1
 naid <- 100
 keep <- which(dat$p > 0.005)
 nbin <- length(keep)
-R0s <- c(0, 2 ^ (0:10))[nR0]
-sim <- data.frame(matrix(0, ncol = naid + 3, nrow = nbin * nR0 * 2))
+R0s <- 1
+sim <- data.frame(matrix(0, nrow = nbin * length(R0range) * 2, ncol = naid + 3))
 colnames(sim)[(naid + 1):(naid + 3)] <- c("state", "bin", "R0")
-for (i in 1:nR0) {
+for (i in 1:length(R0range)) {
     idxx <- (1:nbin) + nbin * 2 * (i - 1)
     idxy <- ((nbin + 1):(2 * nbin)) + nbin * 2 * (i - 1)
 
-    sim[idxx, 1:naid] <- t(read_csv(paste0("simulations/x_", i, ".csv"), col_names = F))
+    sim[idxx, 1:naid] <- t(read_csv(paste0("simulations/x_", R0range[i], ".csv"), col_names = F))
     sim$state[idxx] <- "x"
     sim$bin[idxx] <- keep
-    sim$R0[idxx] <- R0s[i]
+    sim$R0[idxx] <- R0s[R0range[i]]
     
-    sim[idxy, 1:naid] <- t(read_csv(paste0("simulations/y_", i, ".csv"), col_names = F))
+    sim[idxy, 1:naid] <- t(read_csv(paste0("simulations/y_", R0range[i], ".csv"), col_names = F))
     sim$state[idxy] <- "y"
     sim$bin[idxy] <- keep
-    sim$R0[idxy]<- R0s[i]
+    sim$R0[idxy]<- R0s[R0range[i]]
 }
 simproc <- sim |> select(-R0) |> 
     pivot_longer(starts_with("X"), names_to = "aid", values_to = "val") |> 
     mutate(aid = as.numeric(str_remove(aid, "X"))) |>
     # pivot_wider(id_cols = c(aid, bin, R0), names_from = "state", values_from = "val") |> 
     pivot_wider(id_cols = c(aid, bin), names_from = "state", values_from = "val") |> 
-    filter(x > min(dat$x))
+    mutate(z = y / x)
 datdata <- data.frame(aid = dat$aid, bin = dat$bin, mu = dat$mu, phi = dat$phi) |> 
     distinct() |> filter(bin %in% keep)
 simproc <- simproc |> left_join(datdata, by = c("bin", "aid")) |> na.omit()
-simproc$z <- simproc$y / simproc$x
-simproc$z <- 1 / (1 + exp(-20 * (simproc$z - 0.5)))
+simproc$z[simproc$z < 1e-16] = 1e-16
+simproc$z[simproc$z > 1-1e-16] = 1-1e-16
 simproc$R <- with(simproc, rnbinom(nrow(simproc), mu = mu * z, size = phi))
 simstat <- simproc |> 
     # group_by(aid, R0) |> 

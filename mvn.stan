@@ -8,7 +8,6 @@ data {
 
     vector[nbin] p; // bin source abundance
     real P; // total source abundance
-    real f; // fraction of source community infected
 
     vector[n] x; // abundance per bin per aid
     vector[naid] X; // total abundance per aid
@@ -16,26 +15,28 @@ data {
 
     vector[n] mu; // read average per bin per aid
     vector[n] phi; // read overdispersion per bin per aid
-    // array[n] int R; // read counts per bin per aid
+    array[n] int R; // read counts per bin per aid
     
     array[naid] int stat; // number of non-zero bins per aid
     array[naid] int s; // number of bins per aid
     
     real kappa; // compound community parameter
+    real f; // fraction of source community infected
 }
 
 parameters {
+    // real<lower=0,upper=1> f; // fraction of source community infected
     // real<lower=0> R0; // NT * R0, scaled basic reproductive number
     // real<lower=0> eta; // NT * eta, scaled chance of segregation error
-    // real<lower=0> a; // logistic slope control
 }
 
 model {
-    // // priors
-    // R0 ~ gamma(100, 1);
-    // eta ~ gamma(0.1, 1);
-    // // real eta = 0;
-    // a ~ gamma(10, 1);
+    // priors
+    // f ~ beta(1, 99);
+    // R0 ~ gamma(1, 1);
+    // eta ~ gamma(100, 1);
+    // 
+    // real a = 100;
     // 
     // real EY; // expected infected abundance per aid
     // vector[nbin] Ey; // expected infected abundance per bin per aid
@@ -113,7 +114,6 @@ model {
     // 
     // Sigma22[2, 2] = SigmaXY[3];
     // for (i in 1:n) {
-    //     // matrices
     //     Sigma22[1, 1] = SigmaxYy[bin[i]][1];
     //     Sigma22[2, 1] = SigmaxYy[bin[i]][2];
     //     Sigma22[1, 2] = SigmaxYy[bin[i]][2];
@@ -121,38 +121,42 @@ model {
     // 
     //     ycondmu = Ey[bin[i]] + (Sigma12 / Sigma22) * [x[i] - p[bin[i]], Y[aid[i]] - EY]';
     //     z[i] = ycondmu / x[i];
-    //     // z[i] = exp(-log1p_exp(-a * (z[i] - 0.5))) + 1e-16;
-    //     if (z[i] < 1e-16) { z[i] = 1e-16;
-    //     } else if (z[i] > 1-1e-16) z[i] = 1-1e-16;
+    //     z[i] = -log_sum_exp(-log_sum_exp(a * z[i], a * 1e-7), -a) / a;
+    //     if (z[i] < 1e-7) { z[i] = 1e-7;
+    //     } else if (z[i] > 1-1e-7) z[i] = 1-1e-7;
     // }
     // 
     // Y ~ normal(Ycondmu, Ycondvar);
     // // R ~ neg_binomial_2(mu .* z, phi);
     // 
-    // vector[n] theta;
-    // // theta = 1 - exp(phi .* (log(phi) - log(mu .* z + phi)));
-    // // for (i in 1:n) {
-    // //     if (theta[i] < 1e-16) {theta[i] = 1e-16;
-    // //     } else if (theta[i] > 1-1e-16) theta[i] = 1-1e-16;
-    // // }
-    // theta = phi .* (log(phi) - log(mu .* z + phi));
+    // // vector[n] ltheta;
+    // // ltheta = phi .* (log(phi) - log(mu .* z + phi));
+    // vector[n] thetac;
+    // thetac = 1 - exp(phi .* (log(phi) - log(mu .* z + phi)));
+    // for (i in 1:n) {
+    //     if (thetac[i] < 1e-7) { thetac[i] = 1e-7;
+    //     } else if (thetac[i] > 1-1e-7) thetac[i] = 1-1e-7;
+    // }
     // 
     // int pos;
     // pos = 1;
     // for (i in 1:naid) {
-    //     // stat[i] ~ poisson_binomial(segment(theta, pos, s[i]));
-    //     if (stat[i] == 0) {
-    //         target += sum(segment(theta, pos, s[i]));
-    //     } else target += log1m_exp(sum(segment(theta, pos, s[i])));
+    //     stat[i] ~ poisson_binomial(segment(thetac, pos, s[i]));
+    //     // if (stat[i] == 0) {
+    //     //     target += sum(segment(ltheta, pos, s[i]));
+    //     // } else {
+    //     //     target += log1m_exp(sum(segment(ltheta, pos, s[i])));
+    //     // }
     //     pos = pos + s[i];
     // }
 }
 
 generated quantities {
-    real R0 = gamma_rng(0.01, 0.01);
-    real eta = gamma_rng(10, 0.01);
-    // real eta = 0;
-    // real a = gamma_rng(10, 1);
+    // real f = beta_rng(1, 99);
+    real R0 = gamma_rng(1, 1);
+    real eta = gamma_rng(100, 1);
+
+    real a = 100;
 
     real EY; // expected infected abundance per aid
     vector[nbin] Ey; // expected infected abundance per bin per aid
@@ -230,7 +234,6 @@ generated quantities {
 
     Sigma22[2, 2] = SigmaXY[3];
     for (i in 1:n) {
-        // matrices
         Sigma22[1, 1] = SigmaxYy[bin[i]][1];
         Sigma22[2, 1] = SigmaxYy[bin[i]][2];
         Sigma22[1, 2] = SigmaxYy[bin[i]][2];
@@ -238,7 +241,7 @@ generated quantities {
 
         ycondmu = Ey[bin[i]] + (Sigma12 / Sigma22) * [x[i] - p[bin[i]], Y[aid[i]] - EY]';
         z[i] = ycondmu / x[i];
-        // z[i] = exp(-log1p_exp(-a * (z[i] - 0.5))) + 1e-16;
+        z[i] = -log_sum_exp(-log_sum_exp(a * z[i], a * 1e-16), -a) / a;
         if (z[i] < 1e-16) { z[i] = 1e-16;
         } else if (z[i] > 1-1e-16) z[i] = 1-1e-16;
     }
@@ -246,14 +249,18 @@ generated quantities {
     // array[n] int R_sim;
     // R_sim = neg_binomial_2_rng(mu .* z, phi);
 
-    vector[n] theta;
-    theta = 1 - exp(phi .* (log(phi) - log(mu .* z + phi)));
+    vector[n] thetac;
+    thetac = 1 - exp(phi .* (log(phi) - log(mu .* z + phi)));
+    for (i in 1:n) {
+        if (thetac[i] < 1e-16) { thetac[i] = 1e-16;
+        } else if (thetac[i] > 1-1e-16) thetac[i] = 1-1e-16;
+    }
 
     array[naid] int stat_sim;
     int pos;
     pos = 1;
     for (i in 1:naid) {
-        stat_sim[i] = poisson_binomial_rng(segment(theta, pos, s[i]));
+        stat_sim[i] = poisson_binomial_rng(segment(thetac, pos, s[i]));
         pos = pos + s[i];
     }
 }

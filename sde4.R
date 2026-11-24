@@ -610,9 +610,9 @@ fit_pi <- function(cme) {
         parallel_chains = 4)
     
     fit$draws(format = "df") |> pull(f)
-    # data.frame(pi = fit$draws(format = "df") |> pull(f)) |>
-    #     ggplot(aes(x = pi)) +
-    #     geom_density() + theme_classic()
+    data.frame(pi = fit$draws(format = "df") |> pull(f)) |>
+        ggplot(aes(x = pi)) +
+        geom_density() + theme_classic()
 }
 
 mod <- cmdstan_model("pi.stan")

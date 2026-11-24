@@ -39,8 +39,6 @@ function f!(du, u, p, t)
 end
 
 function g!(du, u, p, t)
-    Xbar, xbar, κ, π, R0, η = values(p)
-
     X = u[1]
     x = u[2]
     Y = u[3]
@@ -52,6 +50,9 @@ function g!(du, u, p, t)
     sxx = sigxx(x)
     syy = sigyy(y)
    
+    #=
+    Xbar, xbar, κ, π, R0, η = values(p)
+
     sXx = sigXx(X, x)
     sYy = sigYy(Y, y)
 
@@ -81,7 +82,14 @@ function g!(du, u, p, t)
     du[4, 3] = sYy
     du[4, 4] = syy
 
-    du .= real.(sqrt(du))
+    du .= abs.(sqrt(du))
+    =#
+
+    s = sqrt.(max.([sXX; sxx; sYY; syy], 1e-16))
+    du[1] = s[1]
+    du[2] = s[2]
+    du[3] = s[3]
+    du[4] = s[4]
 end
 
 function getsol(sol)
@@ -91,18 +99,6 @@ function getsol(sol)
     outx = outu[:, 2]
     outY = outu[:, 3]
     outy = outu[:, 4]
-
-    #=
-    outX[outX .> 1] .= 1
-    outX[outX .< 0] .= 0
-    outY[outY .> outX] .= outX[outY .> outX]
-    outY[outY .< 0] .= 0
-
-    outx[outx .> 1] .= 1
-    outx[outx .< 0] .= 0
-    outy[outy .> outx] .= outx[outy .> outx]
-    outy[outy .< 0] .= 0
-    =#
 
     (outX, outx, outY, outy)
 end
@@ -118,13 +114,13 @@ function runner(i, j, Xbar, xbar, κ, π, R0, η, J)
 
     u0 = [Xbar; xbar[j]; Xbar * π; xbar[j] * π]
 
-    prob = SDE.SDEProblem(helper.f!, helper.g!, 
-        u0, (0.0, 10.0), p, noise_rate_prototype = ones(Float64, 4, 4))
-    sol = SDE.solve(prob, SDE.ImplicitEM(), 
+    prob = SDE.SDEProblem(f!, g!, 
+        u0, (0.0, 1.0), p)
+    sol = SDE.solve(prob, SDE.SOSRA(),
         callback = CB.PositiveDomain())
 
-    outX, outx, outY, outy = helper.getsol(sol)
-    timeidx = helper.gettime(sol, J)
+    outX, outx, outY, outy = getsol(sol)
+    timeidx = gettime(sol, J)
 
     idx = sortperm(outY)
 
