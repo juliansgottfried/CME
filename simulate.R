@@ -108,20 +108,22 @@ runner <- function(R0, eta) {
     # plot(table(ret))
 }
 
-scR0 = 0.1
-leta = 5
+scR0 = 10000 / 75000
+leta = log10(75000)
 runner(scR0 * (10 ^ leta), 10 ^ leta)
 
 target0 <- round(0.45238095, 1)
 target1 <- round(0.19047619, 1)
-R0s <- seq(from = 100, to = 100000, length.out = 40)
-etas <- seq(from = 100, to = 100000, length.out = 40)
-grid <- expand.grid(R0s, etas)
-ret <- cbind(grid, t(apply(grid, 1, \(x) runner(x[1], x[2]))))
+# R0s <- seq(from = 100, to = 100000, length.out = 40)
+# etas <- seq(from = 100, to = 100000, length.out = 40)
+scR0s <- seq(from = 0.0001, to = 1/dat$P, length.out = 100)
+letas <- 5
+grid <- expand.grid(scR0s, letas)
+ret <- cbind(grid, t(apply(grid, 1, \(x) runner(x[1] * (10 ^ x[2]), 10 ^ x[2]))))
 colnames(ret) <- c("R0", "eta", "p0", "p1", "p2", "z")
-ret$viz <- round(ret$p0, 1) >= target0 & round(ret$p1, 1) == target1
+# ret$viz <- round(ret$p0, 1) >= target0 & round(ret$p1, 1) == target1
 ret |> 
-    ggplot(aes(x = eta, y = R0, fill = 100 * p0, alpha = viz)) +
+    ggplot(aes(x = eta, y = R0, fill = 100 * p0)) +
     geom_tile() +
     scale_fill_viridis_c(option = 15, name = "%0") +
     scale_alpha_manual(values = c(0.75, 1), name = "match") +
@@ -130,19 +132,18 @@ ret |>
     guides(alpha = "none") +
     theme_classic() +
     theme(text = element_text(size = 12, family = "mono"))
-
 ret |> mutate(R0star = R0 / eta) |> 
-    ggplot(aes(x = log(R0star), y = p0, group = eta, color = eta)) +
+    ggplot(aes(x = R0star, y = p0, group = eta, color = eta)) +
     geom_line() +
     theme_classic()
-ret |> mutate(R0star = R0 / eta) |> 
-    ggplot(aes(x = log(R0star), y = p1, group = eta, color = eta)) +
-    geom_line() +
-    theme_classic()
-ret |> mutate(R0star = R0 / eta) |> 
-    ggplot(aes(x = log(R0star), y = p2, group = eta, color = eta)) +
-    geom_line() +
-    theme_classic()
+# ret |> mutate(R0star = R0 / eta) |> 
+#     ggplot(aes(x = log(R0star), y = p1, group = eta, color = eta)) +
+#     geom_line() +
+#     theme_classic()
+# ret |> mutate(R0star = R0 / eta) |> 
+#     ggplot(aes(x = log(R0star), y = p2, group = eta, color = eta)) +
+#     geom_line() +
+#     theme_classic()
 # ret |> filter(!is.na(var) & !is.infinite(var)) |> 
 #     group_by(R0, f) |> summarize(var = mean(var)) |> 
 #     ggplot(aes(x = R0, y = f, fill = var)) +

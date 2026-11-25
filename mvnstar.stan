@@ -21,6 +21,9 @@ data {
     array[naid] int stat; // number of non-zero bins per aid
     array[naid] int s; // number of bins per aid
     
+    int T0; // number of subjects with 0 infected bins
+    int T1; // number of subjects with 1 infected bin
+    
     real kappa; // compound community parameter
 }
 
@@ -34,6 +37,7 @@ transformed parameters {
     real R0;
 
     // eta = 10 ^ leta;
+    // R0 = scR0 * eta;
     R0 = scR0 * 10 ^ 5;
 }
 
@@ -42,8 +46,8 @@ model {
     scR0 ~ exponential(1) T[0, 1 / P];
     // leta ~ std_normal();
     
-    real eta = 10^5;
-
+    real eta = 10 ^ 5;
+    
     real EY; // expected infected abundance per aid
     vector[nbin] Ey; // expected infected abundance per bin per aid
 
@@ -145,8 +149,12 @@ model {
         } else if (thetac[i] > 1-1e-16) thetac[i] = 1-1e-16;
     }
 
-    int pos;
+    int pos; // counter
     pos = 1;
+    
+    vector[naid] pmf0; // probabilities for 0
+    vector[naid] pmf1; // probabilities for 1
+    
     for (i in 1:naid) {
         // if (stat[i] == 0) {
         //     target += sum(segment(ltheta, pos, s[i]));
@@ -160,16 +168,26 @@ model {
         //     target += poisson_binomial_lccdf(0 | segment(thetac, pos, s[i]));
         // }
         
-        if (stat[i] <= 1) {
-            stat[i] ~ poisson_binomial(segment(thetac, pos, s[i]));
-        } else {
-            target += poisson_binomial_lccdf(1 | segment(thetac, pos, s[i]));
-        }
+        // if (stat[i] <= 1) {
+        //     stat[i] ~ poisson_binomial(segment(thetac, pos, s[i]));
+        // } else {
+        //     target += poisson_binomial_lccdf(1 | segment(thetac, pos, s[i]));
+        // }
         
         // stat[i] ~ poisson_binomial(segment(thetac, pos, s[i]));
         
+        pmf0[i] = exp(poisson_binomial_lpmf(0 | segment(thetac, pos, s[i])));
+        pmf1[i] = exp(poisson_binomial_lpmf(1 | segment(thetac, pos, s[i])));
+        if (pmf0[i] < 1e-16) { pmf0[i] = 1e-16;
+        } else if (pmf0[i] > 1-1e-16) pmf0[i] = 1-1e-16;
+        if (pmf1[i] < 1e-16) { pmf1[i] = 1e-16;
+        } else if (pmf1[i] > 1-1e-16) pmf1[i] = 1-1e-16;
+        
         pos = pos + s[i];
     }
+    
+    T0 ~ poisson_binomial(pmf0);
+    T1 ~ poisson_binomial(pmf1);
 }
 
 generated quantities {
@@ -179,8 +197,8 @@ generated quantities {
     // real eta = 10 ^ leta;
     // real R0 = scR0 * eta;
     
-    real eta = 10^5;
-
+    real eta = 10 ^ 5;
+    
     real EY; // expected infected abundance per aid
     vector[nbin] Ey; // expected infected abundance per bin per aid
 

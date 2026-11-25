@@ -73,7 +73,9 @@ create_dat <- function(cme) {
          P = sum(p),
          f = c4pi,
          stat = all |> group_by(aid) |> summarize(stat = sum(R > 0)) |> pull(stat),
-         s = all |> group_by(aid) |> summarize(n = n()) |> pull(n)
+         s = all |> group_by(aid) |> summarize(n = n()) |> pull(n),
+         T0 = sum(all |> group_by(aid) |> summarize(stat = sum(R > 0)) |> pull(stat) == 0),
+         T1 = sum(all |> group_by(aid) |> summarize(stat = sum(R > 0)) |> pull(stat) == 1)
          )
 }
 
@@ -98,17 +100,14 @@ fit_R0 <- function(cme) {
     mcmc_trace(fit$draws(format = "df", variables = "scR0")) + theme_classic()
     mcmc_trace(fit$draws(format = "df", variables = "leta")) + theme_classic()
 
-    10^(fit$draws(format = "df") |> pull(leta) |> mean())
-    
     GGally::ggpairs(fit$draws(format = "df") |> select(scR0, leta))
     
     realtab <- data.frame(R = dat$R, aid = dat$aid) |> 
         group_by(aid) |> summarize(X = sum(R > 0)) |>
         mutate(X = factor(X, levels = 0:22)) |> 
         pull(X) |> table()
-    realdf <- data.frame(name = 0:22,
-                         mean = as.numeric(realtab / sum(realtab))) |> 
-        mutate(u = mean, l = mean, class = "data")
+    realdf <- data.frame(name = 0:22, m = as.numeric(realtab / sum(realtab))) |> 
+        mutate(u = m, l = m, class = "data")
     
     statsimtab <- fit$draws(format = "df") |> 
         select(starts_with("stat_sim[")) |>
@@ -121,12 +120,12 @@ fit_R0 <- function(cme) {
         pivot_longer(everything()) |> 
         mutate(name = as.numeric(str_remove(name, "X"))) |>
         group_by(name) |> 
-        summarize(mean = mean(value),
+        summarize(m = mean(value),
                   u = quantile(value, 0.975),
                   l = quantile(value, 0.025)) |> 
-        mutate(class = "simulation") |> 
+        mutate(class = "fit") |> 
         rbind(realdf) |>
-        ggplot(aes(x = name, y = mean, color = class, shape = class)) +
+        ggplot(aes(x = name, y = m, color = class, shape = class)) +
         geom_linerange(aes(ymin = l, ymax = u)) +
         geom_point() +
         scale_color_manual(values = c("#36cfe3", "black"), name = "") +
@@ -136,6 +135,8 @@ fit_R0 <- function(cme) {
         theme_classic() +
         theme(text = element_text(size = 12, family = "mono"),
               axis.title.y = element_text(angle = 0, vjust = 0.5))
+    
+    fit$draws(format = "df") |> pull(scR0) |> mean()
 }
 
 mod <- cmdstan_model("mvnstar.stan")
