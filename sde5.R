@@ -63,7 +63,7 @@ create_dat <- function(cme) {
          bin = all$host_bin,
          p = p,
          aid = all$aid,
-         Y = Z * X,
+         # Y = Z * X,
          x = all$x,
          mu = all$M * all$xcov,
          phi = all$M * all$xcov ^ 2 / (all$xvar - all$xcov),
@@ -83,52 +83,66 @@ fit_R0 <- function(cme) {
     dat <- create_dat(cme)
 
     fit <- mod$sample(
-        data = dat,
+        data = dat[dat != "R"],
         chains = 4,
         iter_warmup = 1000,
         iter_sampling = 1000,
-        parallel_chains = 4,
+        parallel_chains = 4)
         # init = list(
-        #     list(R0 = 0.5, eta = 95),
-        #     list(R0 = 1.5, eta = 105),
-        #     list(R0 = 2.5, eta = 110),
-        #     list(R0 = 3.5, eta = 115)))
-        fixed_param = T)
-        # init = list(
-        #     list(f = 0.005, R0 = 3, eta = 3),
-        #     list(f = 0.01, R0 = 4, eta = 4),
-        #     list(f = 0.015, R0 = 5, eta = 5),
-        #     list(f = 0.02, R0 = 6, eta = 6)))
+        #     list(scR0 = 0.5, leta = 0.5),
+        #     list(scR0 = 1, leta = 1),
+        #     list(scR0 = 1.5, leta = 1.5),
+        #     list(scR0 = 1.75, leta = 2)))
+        # fixed_param = T)
     
-    # mcmc_trace(fit$draws(format = "df", variables = "f")) + theme_classic()
-    mcmc_trace(fit$draws(format = "df", variables = "R0")) + theme_classic()
-    mcmc_trace(fit$draws(format = "df", variables = "eta")) + theme_classic()
+    mcmc_trace(fit$draws(format = "df", variables = "scR0")) + theme_classic()
+    mcmc_trace(fit$draws(format = "df", variables = "leta")) + theme_classic()
 
-    # fit$draws(format = "df") |> pull(R0) |> mean()
+    10^(fit$draws(format = "df") |> pull(leta) |> mean())
     
-    GGally::ggpairs(fit$draws(format = "df") |> select(R0, eta))
+    GGally::ggpairs(fit$draws(format = "df") |> select(scR0, leta))
     
     realtab <- data.frame(R = dat$R, aid = dat$aid) |> 
         group_by(aid) |> summarize(X = sum(R > 0)) |>
         mutate(X = factor(X, levels = 0:22)) |> 
         pull(X) |> table()
-    plot(realtab / sum(realtab))
+    realdf <- data.frame(name = 0:22,
+                         mean = as.numeric(realtab / sum(realtab))) |> 
+        mutate(u = mean, l = mean, class = "data")
     
     statsimtab <- fit$draws(format = "df") |> 
         select(starts_with("stat_sim[")) |>
-        t() |> as.data.frame() |> 
-        apply(1, \(x) table(factor(x, levels = 0:99))) |> 
-        rowSums()
-    plot(statsimtab / sum(statsimtab), type = "h")
+        apply(1, \(x) {
+            tab <- table(factor(x, levels = 0:22))
+            tab / sum(tab)
+            }) |> t() |> data.frame()
+    
+    statsimtab |> 
+        pivot_longer(everything()) |> 
+        mutate(name = as.numeric(str_remove(name, "X"))) |>
+        group_by(name) |> 
+        summarize(mean = mean(value),
+                  u = quantile(value, 0.975),
+                  l = quantile(value, 0.025)) |> 
+        mutate(class = "simulation") |> 
+        rbind(realdf) |>
+        ggplot(aes(x = name, y = mean, color = class, shape = class)) +
+        geom_linerange(aes(ymin = l, ymax = u)) +
+        geom_point() +
+        scale_color_manual(values = c("#36cfe3", "black"), name = "") +
+        scale_shape_manual(values = c(19, 3), name = "") +
+        labs(x = "# infected bins", y = "frequency") +
+        ggtitle("c4") +
+        theme_classic() +
+        theme(text = element_text(size = 12, family = "mono"),
+              axis.title.y = element_text(angle = 0, vjust = 0.5))
 }
 
-mod <- cmdstan_model("mvn.stan")
+mod <- cmdstan_model("mvnstar.stan")
 
 ret <- data.frame(sapply("c4", fit_R0))
 write_csv(ret, "ret.csv")
 ret <- read_csv("ret.csv")
-
-
 
 # sims
 R0range <- 1:1

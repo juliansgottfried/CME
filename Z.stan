@@ -13,7 +13,7 @@ parameters {
 }
 
 model {
-    Z ~ beta(1, 1);
+    Z ~ beta(1, 99);
     int pos;
     pos = 1;
     for (i in 1:naid) {

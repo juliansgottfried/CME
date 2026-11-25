@@ -1,6 +1,9 @@
-runner <- function(f, R0, eta) {
-    a <- 100
+runner <- function(R0, eta) {
+    # R0 <- 1
+    # eta <- 1000
     
+    # a <- 1000
+
     AXY <- matrix(0, nrow = 3, ncol = 3)
     AxYy <- matrix(0, nrow = 6, ncol = 6)
     
@@ -13,7 +16,7 @@ runner <- function(f, R0, eta) {
     Sigma22 <- matrix(0, 2, 2)
     
     z <- rep(0, dat$n)
-    
+
     EY <- with(dat, (-(kappa + eta - R0 * P) + sqrt((kappa + eta - R0 * P) ^ 2 - 4 * R0 * (-kappa * P * f))) / (2 * R0))
     Ey <- with(dat, p * (kappa * f + R0 * EY) / (kappa + eta + R0 * EY))
     
@@ -21,7 +24,7 @@ runner <- function(f, R0, eta) {
     AXY[2, 1] = R0 * EY
     AXY[2, 2] = with(dat, -2 * kappa - eta + R0 * (P - 2 * EY))
     AXY[3, 2] = 2 * R0 * EY
-    AXY[3, 3] = -with(dat, 2 * kappa - 2 * eta + 2 * R0 * (P - 2 * EY))
+    AXY[3, 3] = with(dat, -2 * kappa - 2 * eta + 2 * R0 * (P - 2 * EY))
     
     AxYy[1, 1] = -2 * dat$kappa;
     AxYy[2, 2] = with(dat, -2 * kappa - eta + R0 * (P - 2 * EY))
@@ -36,32 +39,36 @@ runner <- function(f, R0, eta) {
     sXY <- c(with(dat, sqrt(P * (1 - P))), 
              sqrt(EY * (1 - EY)))
     
-    sxYy[, 1] = rep(sqrt(EY * (1 - EY)), dat$nbin)
-    sxYy[, 2] = with(dat, sqrt(p * (1 - p)))
+    sxYy[, 1] = with(dat, sqrt(p * (1 - p)))
+    sxYy[, 2] = rep(sqrt(EY * (1 - EY)), dat$nbin)
     sxYy[, 3] = sqrt(Ey * (1 - Ey))
     
-    bXY <- c(-sXY[1] ^ 2,
-             -sXY[1] * sXY[2],
-             -sXY[2] ^ 2)
+    bXY <- -c(sXY[1] ^ 2,
+             sXY[1] * sXY[2],
+             sXY[2] ^ 2)
     
-    bxYy[, 1] = -sxYy[, 1] ^ 2;
-    bxYy[, 2] = -sxYy[, 1] * sxYy[, 2];
-    bxYy[, 3] = -sxYy[, 1] * sxYy[, 3];
-    bxYy[, 4] = -sxYy[, 2] ^ 2;
-    bxYy[, 5] = -sxYy[, 2] * sxYy[, 3];
-    bxYy[, 6] = -sxYy[, 3] ^ 2;
+    bxYy[, 1] = -sxYy[, 1] ^ 2
+    bxYy[, 2] = -sxYy[, 1] * sxYy[, 2]
+    bxYy[, 3] = -sxYy[, 1] * sxYy[, 3]
+    bxYy[, 4] = -sxYy[, 2] ^ 2
+    bxYy[, 5] = -sxYy[, 2] * sxYy[, 3]
+    bxYy[, 6] = -sxYy[, 3] ^ 2
     
     SigmaXY <- solve(AXY) %*% bXY
     
     for (i in 1:dat$nbin) {
-        AxYy[3, 2] = R0 * (dat$p[i] - Ey[i]);
-        AxYy[5, 4] = AxYy[3, 2];
-        AxYy[6, 5] = 2 * AxYy[3, 2];
-        SigmaxYy[i, ] <- solve(AxYy) %*% bxYy[i, ]
+        AxYy[3, 2] = R0 * (dat$p[i] - Ey[i])
+        AxYy[5, 4] = AxYy[3, 2]
+        AxYy[6, 5] = 2 * AxYy[3, 2]
+        SigmaxYy[i, ] = solve(AxYy) %*% bxYy[i, ]
     }
     
-    Ycondmu <- with(dat, EY + (SigmaXY[2] %*% solve(SigmaXY[1])) %*% (X - P))
-    Ycondvar <- SigmaXY[3] - (SigmaXY[2] %*% solve(SigmaXY[1])) %*% SigmaXY[2]
+    # Ycondmu <- with(dat, EY + (SigmaXY[2] / SigmaXY[1]) * (X - P))
+    # for (i in 1:dat$naid) {
+    #     if (Ycondmu[i] < 1e-12) Ycondmu[i] = 1e-12
+    #     if (Ycondmu[i] > 1-1e-12) Ycondmu[i] = 1-1e-12
+    # }
+    # Ycondvar <- SigmaXY[3] - (SigmaXY[2] / SigmaXY[1]) * SigmaXY[2]
     
     Sigma22[2, 2] <- SigmaXY[3]
     for (i in 1:dat$n) {
@@ -69,56 +76,73 @@ runner <- function(f, R0, eta) {
         Sigma22[2, 1] = SigmaxYy[dat$bin[i], 2]
         Sigma22[1, 2] = SigmaxYy[dat$bin[i], 2]
         Sigma12 = with(dat, c(SigmaxYy[bin[i], 3], SigmaxYy[bin[i], 5]))
-    
-        ycondmu = with(dat, Ey[bin[i]] + (Sigma12 %*% solve(Sigma22)) %*% c(x[i] - p[bin[i]], Y[aid[i]] - EY))
+        # ycondmu = with(dat, Ey[bin[i]] + (Sigma12 %*% solve(Sigma22)) %*% c(x[i] - p[bin[i]], 0))
+        ycondmu = with(dat, Ey[bin[i]] + (Sigma12 %*% solve(Sigma22))[1] * (x[i] - p[bin[i]]))
         z[i] = ycondmu / dat$x[i]
-        z[i] = -matrixStats::logSumExp(c(-matrixStats::logSumExp(c(a * z[i], a * 1e-16)), -a)) / a
+        # z[i] = -matrixStats::logSumExp(c(-matrixStats::logSumExp(c(a * z[i], a * 1e-16)), -a)) / a
+        if (z[i] < 1e-16) { z[i] = 1e-16
+        } else if (z[i] > 1-1e-16) z[i] = 1-1e-16
     }
-    
+
     thetac <- rep(0, dat$n)
     thetac <- with(dat, 1 - exp(phi * (log(phi) - log(mu * z + phi))))
-    
+
     ret <- rep(0, dat$naid)
     ret2 <- rep(0, dat$naid)
+    ret3 <- rep(0, dat$naid)
     pos = 1
     
-    # for (i in 1:dat$naid) {
-    #     hold <- poisbinom::rpoisbinom(1000, thetac[pos:(pos + dat$s[i] - 1)])
-    #     ret1[i] = mean(hold == 0)
-    #     ret2[i] = mean(hold == 1)
-    #     pos = pos + dat$s[i]
-    # }
-    # c(mean(ret), mean(ret2))
-    
     for (i in 1:dat$naid) {
-        ret[i] = poisbinom::rpoisbinom(1, thetac[pos:(pos + dat$s[i] - 1)])
+        hold <- poisbinom::rpoisbinom(1000, thetac[pos:(pos + dat$s[i] - 1)])
+        ret[i] = mean(hold == 0)
+        ret2[i] = mean(hold == 1)
+        ret3[i] = mean(hold == 2)
         pos = pos + dat$s[i]
     }
-    plot(table(ret))
+    c(mean(ret), mean(ret2), mean(ret3), mean(z))
     
-    # mean(z)
+    # for (i in 1:dat$naid) {
+    #     ret[i] = poisbinom::rpoisbinom(1, thetac[pos:(pos + dat$s[i] - 1)])
+    #     pos = pos + dat$s[i]
+    # }
+    # plot(table(ret))
 }
 
-target0 <- round(0.45238095, 2)
-target1 <- round(0.19047619, 2)
-f <- 0.045
-R0s <- seq(from = 100, to = 1000000, length.out = 30)
-etas <- seq(from = 100, to = 1000000, length.out = 30)
-grid <- expand.grid(f, R0s, etas)
-ret <- cbind(grid, t(apply(grid, 1, \(x) runner(x[1], x[2], x[3]))))
-colnames(ret) <- c("f", "R0", "eta", "p0", "p1")
-ret$keep <- round(ret$p0, 2) >= target0 & round(ret$p1, 2) >= target1
-ret |> filter(!is.na(p0) & !is.infinite(p0)) |>
-    ggplot(aes(x = eta, y = R0, fill = 100*p0, alpha = keep)) +
+scR0 = 0.1
+leta = 5
+runner(scR0 * (10 ^ leta), 10 ^ leta)
+
+target0 <- round(0.45238095, 1)
+target1 <- round(0.19047619, 1)
+R0s <- seq(from = 100, to = 100000, length.out = 40)
+etas <- seq(from = 100, to = 100000, length.out = 40)
+grid <- expand.grid(R0s, etas)
+ret <- cbind(grid, t(apply(grid, 1, \(x) runner(x[1], x[2]))))
+colnames(ret) <- c("R0", "eta", "p0", "p1", "p2", "z")
+ret$viz <- round(ret$p0, 1) >= target0 & round(ret$p1, 1) == target1
+ret |> 
+    ggplot(aes(x = eta, y = R0, fill = 100 * p0, alpha = viz)) +
     geom_tile() +
     scale_fill_viridis_c(option = 15, name = "%0") +
-    scale_alpha_manual(values = c(0.5, 1), name = "match") +
-    geom_abline(slope = 1/dat$P, color = "black", 
-                linetype = 2, linewidth = 1) +
+    scale_alpha_manual(values = c(0.75, 1), name = "match") +
+    geom_abline(slope = 1/dat$P, color = "white", 
+                linetype = 3, linewidth = 1) +
     guides(alpha = "none") +
     theme_classic() +
     theme(text = element_text(size = 12, family = "mono"))
 
+ret |> mutate(R0star = R0 / eta) |> 
+    ggplot(aes(x = log(R0star), y = p0, group = eta, color = eta)) +
+    geom_line() +
+    theme_classic()
+ret |> mutate(R0star = R0 / eta) |> 
+    ggplot(aes(x = log(R0star), y = p1, group = eta, color = eta)) +
+    geom_line() +
+    theme_classic()
+ret |> mutate(R0star = R0 / eta) |> 
+    ggplot(aes(x = log(R0star), y = p2, group = eta, color = eta)) +
+    geom_line() +
+    theme_classic()
 # ret |> filter(!is.na(var) & !is.infinite(var)) |> 
 #     group_by(R0, f) |> summarize(var = mean(var)) |> 
 #     ggplot(aes(x = R0, y = f, fill = var)) +
