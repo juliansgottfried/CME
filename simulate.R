@@ -1,9 +1,7 @@
-runner <- function(R0, eta) {
-    # R0 <- 1
-    # eta <- 1000
+runner <- function(scR0, P) {
+    eta <- 10 ^ 5
+    R0 <- scR0 * eta
     
-    # a <- 1000
-
     AXY <- matrix(0, nrow = 3, ncol = 3)
     AxYy <- matrix(0, nrow = 6, ncol = 6)
     
@@ -17,29 +15,29 @@ runner <- function(R0, eta) {
     
     z <- rep(0, dat$n)
 
-    EY <- with(dat, (-(kappa + eta - R0 * P) + sqrt((kappa + eta - R0 * P) ^ 2 - 4 * R0 * (-kappa * P * f))) / (2 * R0))
-    Ey <- with(dat, p * (kappa * f + R0 * EY) / (kappa + eta + R0 * EY))
+    EY <- (-(dat$kappa + eta - R0 * P) + sqrt((dat$kappa + eta - R0 * P) ^ 2 - 4 * R0 * (-dat$kappa * P * dat$f))) / (2 * R0)
+    Ey <- dat$p * (dat$kappa * dat$f + R0 * EY) / (dat$kappa + eta + R0 * EY)
     
     AXY[1, 1] = -2 * dat$kappa
     AXY[2, 1] = R0 * EY
-    AXY[2, 2] = with(dat, -2 * kappa - eta + R0 * (P - 2 * EY))
+    AXY[2, 2] = -2 * dat$kappa - eta + R0 * (P - 2 * EY)
     AXY[3, 2] = 2 * R0 * EY
-    AXY[3, 3] = with(dat, -2 * kappa - 2 * eta + 2 * R0 * (P - 2 * EY))
+    AXY[3, 3] = -2 * dat$kappa - 2 * eta + 2 * R0 * (P - 2 * EY)
     
     AxYy[1, 1] = -2 * dat$kappa;
-    AxYy[2, 2] = with(dat, -2 * kappa - eta + R0 * (P - 2 * EY))
+    AxYy[2, 2] = -2 * dat$kappa - eta + R0 * (P - 2 * EY)
     AxYy[3, 1] = R0 * EY
     AxYy[3, 3] = -2 * dat$kappa - eta - R0 * EY
-    AxYy[4, 4] = with(dat, -2 * kappa - 2 * eta + 2 * R0 * (P - 2 * EY))
+    AxYy[4, 4] = -2 * dat$kappa - 2 * eta + 2 * R0 * (P - 2 * EY)
     AxYy[5, 2] = R0 * EY
     AxYy[5, 5] = -dat$kappa - eta - R0 * EY
     AxYy[6, 3] = 2 * R0 * EY
-    AxYy[6, 6] = with(dat, -2 * kappa - 2 * eta - 2 * R0 * EY)
+    AxYy[6, 6] = -2 * dat$kappa - 2 * eta - 2 * R0 * EY
     
-    sXY <- c(with(dat, sqrt(P * (1 - P))), 
+    sXY <- c(sqrt(P * (1 - P)), 
              sqrt(EY * (1 - EY)))
     
-    sxYy[, 1] = with(dat, sqrt(p * (1 - p)))
+    sxYy[, 1] = sqrt(dat$p * (1 - dat$p))
     sxYy[, 2] = rep(sqrt(EY * (1 - EY)), dat$nbin)
     sxYy[, 3] = sqrt(Ey * (1 - Ey))
     
@@ -75,9 +73,9 @@ runner <- function(R0, eta) {
         Sigma22[1, 1] = SigmaxYy[dat$bin[i], 1]
         Sigma22[2, 1] = SigmaxYy[dat$bin[i], 2]
         Sigma22[1, 2] = SigmaxYy[dat$bin[i], 2]
-        Sigma12 = with(dat, c(SigmaxYy[bin[i], 3], SigmaxYy[bin[i], 5]))
+        Sigma12 = c(SigmaxYy[dat$bin[i], 3], SigmaxYy[dat$bin[i], 5])
         # ycondmu = with(dat, Ey[bin[i]] + (Sigma12 %*% solve(Sigma22)) %*% c(x[i] - p[bin[i]], 0))
-        ycondmu = with(dat, Ey[bin[i]] + (Sigma12 %*% solve(Sigma22))[1] * (x[i] - p[bin[i]]))
+        ycondmu = Ey[dat$bin[i]] + (Sigma12 %*% solve(Sigma22))[1] * (dat$x[i] - dat$p[dat$bin[i]])
         z[i] = ycondmu / dat$x[i]
         # z[i] = -matrixStats::logSumExp(c(-matrixStats::logSumExp(c(a * z[i], a * 1e-16)), -a)) / a
         if (z[i] < 1e-16) { z[i] = 1e-16
@@ -85,7 +83,7 @@ runner <- function(R0, eta) {
     }
 
     thetac <- rep(0, dat$n)
-    thetac <- with(dat, 1 - exp(phi * (log(phi) - log(mu * z + phi))))
+    thetac <- 1 - exp(dat$phi * (log(dat$phi) - log(dat$mu * z + dat$phi)))
 
     ret <- rep(0, dat$naid)
     ret2 <- rep(0, dat$naid)
@@ -108,34 +106,39 @@ runner <- function(R0, eta) {
     # plot(table(ret))
 }
 
-scR0 = 10000 / 75000
-leta = log10(75000)
 runner(scR0 * (10 ^ leta), 10 ^ leta)
 
 target0 <- round(0.45238095, 1)
 target1 <- round(0.19047619, 1)
 # R0s <- seq(from = 100, to = 100000, length.out = 40)
 # etas <- seq(from = 100, to = 100000, length.out = 40)
-scR0s <- seq(from = 0.0001, to = 1/dat$P, length.out = 100)
-letas <- 5
-grid <- expand.grid(scR0s, letas)
-ret <- cbind(grid, t(apply(grid, 1, \(x) runner(x[1] * (10 ^ x[2]), 10 ^ x[2]))))
-colnames(ret) <- c("R0", "eta", "p0", "p1", "p2", "z")
+
+scR0s <- exp(seq(from = log(1), to = log(100), length.out = 40))
+fs <-  exp(seq(from = log(0.01), to = log(1), length.out = 40))
+grid <- expand.grid(scR0s, fs)
+ret <- cbind(grid, t(apply(grid, 1, \(x) runner(x[1], x[2]))))
+colnames(ret) <- c("scR0", "f", "p0", "p1", "p2", "z")
 # ret$viz <- round(ret$p0, 1) >= target0 & round(ret$p1, 1) == target1
 ret |> 
-    ggplot(aes(x = eta, y = R0, fill = 100 * p0)) +
+    ggplot(aes(x = log(f), y = log(scR0), fill = 100 * z)) +
     geom_tile() +
-    scale_fill_viridis_c(option = 15, name = "%0") +
-    scale_alpha_manual(values = c(0.75, 1), name = "match") +
-    geom_abline(slope = 1/dat$P, color = "white", 
+    scale_fill_viridis_c(option = 15, name = "% infected") +
+    # scale_alpha_manual(values = c(0.75, 1), name = "match") +
+    # geom_abline(slope = 1/dat$P, color = "white",
+    #             linetype = 3, linewidth = 1) +
+    geom_abline(slope = -1, color = "white",
                 linetype = 3, linewidth = 1) +
+    geom_point(x = log(c4pi), y = log(1.489178), 
+               color = "white", shape = 3, size = 2) +
+    labs(x = "log f", y = "log R0/eta") +
     guides(alpha = "none") +
     theme_classic() +
-    theme(text = element_text(size = 12, family = "mono"))
-ret |> mutate(R0star = R0 / eta) |> 
-    ggplot(aes(x = R0star, y = p0, group = eta, color = eta)) +
-    geom_line() +
-    theme_classic()
+    theme(text = element_text(size = 12, family = "mono"),
+           axis.title.y = element_text(angle = 0, vjust = 0.5))
+# ret |> mutate(R0star = R0 / eta) |> 
+#     ggplot(aes(x = R0star, y = p0, group = eta, color = eta)) +
+#     geom_line() +
+#     theme_classic()
 # ret |> mutate(R0star = R0 / eta) |> 
 #     ggplot(aes(x = log(R0star), y = p1, group = eta, color = eta)) +
 #     geom_line() +
