@@ -21,47 +21,51 @@ data {
     array[naid] int stat; // number of non-zero bins per aid
     array[naid] int s; // number of bins per aid
     
-    int T0; // number of subjects with 0 infected bins
-    int T1; // number of subjects with 1 infected bin
+    // int T0; // number of subjects with 0 infected bins
+    // int T1; // number of subjects with 1 infected bin
     
     real kappa; // compound community parameter
 }
 
 parameters {
-    real<lower=0, upper=1/P> scR0; // R0 / eta, modified basic reproductive number
-    // real leta; // log10(NT * eta), log scaled chance of segregation error
+    real<lower=0,upper=1/P> scR0; // R0 / eta, modified basic reproductive number
+    real leta; // log10(NT * eta), log scaled chance of segregation error
 }
 
 transformed parameters {
-    // real eta;
+    real eta;
     real R0;
 
-    // eta = 10 ^ leta;
-    // R0 = scR0 * eta;
-    R0 = scR0 * 10 ^ 5;
+    eta = 10 ^ leta;
+    R0 = scR0 * eta;
+    // R0 = scR0 * 10 ^ 5;
 }
 
 model {
     // priors
     scR0 ~ exponential(1) T[0, 1 / P];
-    // leta ~ std_normal();
+    leta ~ std_normal();
     
-    real eta = 10 ^ 5;
+    // real eta = 10 ^ 5;
     
     real EY; // expected infected abundance per aid
     vector[nbin] Ey; // expected infected abundance per bin per aid
 
     matrix[3, 3] AXY = rep_matrix(0, 3, 3); // matrix for solving for XY covariance
     matrix[6, 6] AxYy = rep_matrix(0, 6, 6); // matrix for solving for xYy covariance
+    // matrix[3, 3] Axy = rep_matrix(0, 3, 3); // matrix for solving for xy covariance
 
     vector[2] sXY; // diffusion values for X and Y
     matrix[nbin, 3] sxYy; // diffusion values for x, Y, and y
+    // matrix[nbin, 2] sxy; // diffusion values for x and y
 
     vector[3] bXY; // vector for solving for XY covariance
     matrix[nbin, 6] bxYy; // vector for solving for xYy covariance
+    // matrix[nbin, 3] bxy; // vector for solving for xy covariance
 
     vector[3] SigmaXY; // XY covariance values
     matrix[nbin, 6] SigmaxYy; // xYy covariance values
+    // matrix[nbin, 3] Sigmaxy; // xy covariance values
 
     matrix[2, 2] Sigma22; // xY covariance matrix, for inversion
     row_vector[2] Sigma12; // xYy covariance, i.e. without variances
@@ -90,6 +94,12 @@ model {
     AxYy[5, 5] = -kappa - eta - R0 * EY;
     AxYy[6, 3] = 2 * R0 * EY;
     AxYy[6, 6] = -2 * kappa - 2 * eta - 2 * R0 * EY;
+    
+    // Axy[1, 1] = -2 * kappa;
+    // Axy[2, 1] = R0 * EY;
+    // Axy[2, 2] = -2 * kappa - eta - R0 * EY;
+    // Axy[3, 2] = 2 * R0 * EY;
+    // Axy[3, 3] = -2 * kappa - 2 * eta - 2 * R0 * EY;
 
     sXY[1] = sqrt(P * (1 - P));
     sXY[2] = sqrt(EY * (1 - EY));
@@ -97,6 +107,9 @@ model {
     sxYy[, 1] = sqrt(p .* (1 - p));
     sxYy[, 2] = rep_vector(sqrt(EY * (1 - EY)), nbin);
     sxYy[, 3] = sqrt(Ey .* (1 - Ey));
+    
+    // sxy[, 1] = sqrt(p .* (1 - p));
+    // sxy[, 2] = sqrt(Ey .* (1 - Ey));
 
     bXY[1] = -sXY[1] ^ 2;
     bXY[2] = -sXY[1] * sXY[2];
@@ -108,6 +121,10 @@ model {
     bxYy[, 4] = -sxYy[, 2] ^ 2;
     bxYy[, 5] = -sxYy[, 2] .* sxYy[, 3];
     bxYy[, 6] = -sxYy[, 3] ^ 2;
+    
+    // bxy[, 1] = -sxy[, 1] ^ 2;
+    // bxy[, 2] = -sxy[, 1] .* sxy[, 2];
+    // bxy[, 3] = -sxy[, 2] ^ 2;
 
     SigmaXY = mdivide_left_tri_low(AXY, bXY);
 
@@ -116,8 +133,9 @@ model {
         AxYy[5, 4] = AxYy[3, 2];
         AxYy[6, 5] = 2 * AxYy[3, 2];
         SigmaxYy[i, ] = mdivide_left_tri_low(AxYy, bxYy[i]')';
+        // Sigmaxy[i, ] = mdivide_left_tri_low(Axy, bxy[i]')';
     }
-
+    
     // Ycondmu = EY + (SigmaXY[2] / SigmaXY[1]) .* (X - P);
     // Ycondvar = SigmaXY[3] - (SigmaXY[2] / SigmaXY[1]) * SigmaXY[2];
 
@@ -130,6 +148,8 @@ model {
         Sigma12 = [SigmaxYy[bin[i], 3], SigmaxYy[bin[i], 5]];
 
         ycondmu = Ey[bin[i]] + (Sigma12 / Sigma22)[1] * (x[i] - p[bin[i]]);
+        // ycondmu = Ey[bin[i]] + (Sigmaxy[bin[i], 2] / Sigmaxy[bin[i], 1]) * (x[i] - p[bin[i]]);
+        
         z[i] = ycondmu / x[i];
         // z[i] = -log_sum_exp(-log_sum_exp(a * z[i], a * 1e-16), -a) / a;
         if (z[i] < 1e-16) { z[i] = 1e-16;
@@ -139,28 +159,28 @@ model {
     // Y ~ normal(Ycondmu, Ycondvar);
     // R ~ neg_binomial_2(mu .* z, phi);
 
-    // vector[n] ltheta;
-    // ltheta = phi .* (log(phi) - log(mu .* z + phi));
+    vector[n] ltheta;
+    ltheta = phi .* (log(phi) - log(mu .* z + phi));
     
-    vector[n] thetac;
-    thetac = 1 - exp(phi .* (log(phi) - log(mu .* z + phi)));
-    for (i in 1:n) {
-        if (thetac[i] < 1e-16) { thetac[i] = 1e-16;
-        } else if (thetac[i] > 1-1e-16) thetac[i] = 1-1e-16;
-    }
+    // vector[n] thetac;
+    // thetac = 1 - exp(phi .* (log(phi) - log(mu .* z + phi)));
+    // for (i in 1:n) {
+    //     if (thetac[i] < 1e-16) { thetac[i] = 1e-16;
+    //     } else if (thetac[i] > 1-1e-16) thetac[i] = 1-1e-16;
+    // }
 
     int pos; // counter
     pos = 1;
     
-    vector[naid] pmf0; // probabilities for 0
-    vector[naid] pmf1; // probabilities for 1
+    // vector[naid] pmf0; // probabilities for 0
+    // vector[naid] pmf1; // probabilities for 1
     
     for (i in 1:naid) {
-        // if (stat[i] == 0) {
-        //     target += sum(segment(ltheta, pos, s[i]));
-        // } else {
-        //     target += log1m_exp(sum(segment(ltheta, pos, s[i])));
-        // }
+        if (stat[i] == 0) {
+            target += sum(segment(ltheta, pos, s[i]));
+        } else {
+            target += log1m_exp(sum(segment(ltheta, pos, s[i])));
+        }
         
         // if (stat[i] == 0) {
         //     target += poisson_binomial_lpmf(0 | segment(thetac, pos, s[i]));
@@ -176,18 +196,18 @@ model {
         
         // stat[i] ~ poisson_binomial(segment(thetac, pos, s[i]));
         
-        pmf0[i] = exp(poisson_binomial_lpmf(0 | segment(thetac, pos, s[i])));
-        pmf1[i] = exp(poisson_binomial_lpmf(1 | segment(thetac, pos, s[i])));
-        if (pmf0[i] < 1e-16) { pmf0[i] = 1e-16;
-        } else if (pmf0[i] > 1-1e-16) pmf0[i] = 1-1e-16;
-        if (pmf1[i] < 1e-16) { pmf1[i] = 1e-16;
-        } else if (pmf1[i] > 1-1e-16) pmf1[i] = 1-1e-16;
+        // pmf0[i] = exp(poisson_binomial_lpmf(0 | segment(thetac, pos, s[i])));
+        // pmf1[i] = exp(poisson_binomial_lpmf(1 | segment(thetac, pos, s[i])));
+        // if (pmf0[i] < 1e-16) { pmf0[i] = 1e-16;
+        // } else if (pmf0[i] > 1-1e-16) pmf0[i] = 1-1e-16;
+        // if (pmf1[i] < 1e-16) { pmf1[i] = 1e-16;
+        // } else if (pmf1[i] > 1-1e-16) pmf1[i] = 1-1e-16;
         
         pos = pos + s[i];
     }
     
-    T0 ~ poisson_binomial(pmf0);
-    T1 ~ poisson_binomial(pmf1);
+    // T0 ~ poisson_binomial(pmf0);
+    // T1 ~ poisson_binomial(pmf1);
 }
 
 generated quantities {
@@ -197,22 +217,26 @@ generated quantities {
     // real eta = 10 ^ leta;
     // real R0 = scR0 * eta;
     
-    real eta = 10 ^ 5;
+    // real eta = 10 ^ 5;
     
     real EY; // expected infected abundance per aid
     vector[nbin] Ey; // expected infected abundance per bin per aid
 
     matrix[3, 3] AXY = rep_matrix(0, 3, 3); // matrix for solving for XY covariance
     matrix[6, 6] AxYy = rep_matrix(0, 6, 6); // matrix for solving for xYy covariance
+    // matrix[3, 3] Axy = rep_matrix(0, 3, 3); // matrix for solving for xy covariance
 
     vector[2] sXY; // diffusion values for X and Y
     matrix[nbin, 3] sxYy; // diffusion values for x, Y, and y
+    // matrix[nbin, 2] sxy; // diffusion values for x and y
 
     vector[3] bXY; // vector for solving for XY covariance
     matrix[nbin, 6] bxYy; // vector for solving for xYy covariance
+    // matrix[nbin, 3] bxy; // vector for solving for xy covariance
 
     vector[3] SigmaXY; // XY covariance values
     matrix[nbin, 6] SigmaxYy; // xYy covariance values
+    // matrix[nbin, 3] Sigmaxy; // xy covariance values
 
     matrix[2, 2] Sigma22; // xY covariance matrix, for inversion
     row_vector[2] Sigma12; // xYy covariance, i.e. without variances
@@ -241,6 +265,12 @@ generated quantities {
     AxYy[5, 5] = -kappa - eta - R0 * EY;
     AxYy[6, 3] = 2 * R0 * EY;
     AxYy[6, 6] = -2 * kappa - 2 * eta - 2 * R0 * EY;
+    
+    // Axy[1, 1] = -2 * kappa;
+    // Axy[2, 1] = R0 * EY;
+    // Axy[2, 2] = -2 * kappa - eta - R0 * EY;
+    // Axy[3, 2] = 2 * R0 * EY;
+    // Axy[3, 3] = -2 * kappa - 2 * eta - 2 * R0 * EY;
 
     sXY[1] = sqrt(P * (1 - P));
     sXY[2] = sqrt(EY * (1 - EY));
@@ -248,6 +278,9 @@ generated quantities {
     sxYy[, 1] = sqrt(p .* (1 - p));
     sxYy[, 2] = rep_vector(sqrt(EY * (1 - EY)), nbin);
     sxYy[, 3] = sqrt(Ey .* (1 - Ey));
+    
+    // sxy[, 1] = sqrt(p .* (1 - p));
+    // sxy[, 2] = sqrt(Ey .* (1 - Ey));
 
     bXY[1] = -sXY[1] ^ 2;
     bXY[2] = -sXY[1] * sXY[2];
@@ -259,6 +292,10 @@ generated quantities {
     bxYy[, 4] = -sxYy[, 2] ^ 2;
     bxYy[, 5] = -sxYy[, 2] .* sxYy[, 3];
     bxYy[, 6] = -sxYy[, 3] ^ 2;
+    
+    // bxy[, 1] = -sxy[, 1] ^ 2;
+    // bxy[, 2] = -sxy[, 1] .* sxy[, 2];
+    // bxy[, 3] = -sxy[, 2] ^ 2;
 
     SigmaXY = mdivide_left_tri_low(AXY, bXY);
 
@@ -267,8 +304,9 @@ generated quantities {
         AxYy[5, 4] = AxYy[3, 2];
         AxYy[6, 5] = 2 * AxYy[3, 2];
         SigmaxYy[i, ] = mdivide_left_tri_low(AxYy, bxYy[i]')';
+        // Sigmaxy[i, ] = mdivide_left_tri_low(Axy, bxy[i]')';
     }
-
+    
     // Ycondmu = EY + (SigmaXY[2] / SigmaXY[1]) .* (X - P);
     // Ycondvar = SigmaXY[3] - (SigmaXY[2] / SigmaXY[1]) * SigmaXY[2];
 
@@ -281,6 +319,8 @@ generated quantities {
         Sigma12 = [SigmaxYy[bin[i], 3], SigmaxYy[bin[i], 5]];
 
         ycondmu = Ey[bin[i]] + (Sigma12 / Sigma22)[1] * (x[i] - p[bin[i]]);
+        // ycondmu = Ey[bin[i]] + (Sigmaxy[bin[i], 2] / Sigmaxy[bin[i], 1]) * (x[i] - p[bin[i]]);
+        
         z[i] = ycondmu / x[i];
         // z[i] = -log_sum_exp(-log_sum_exp(a * z[i], a * 1e-16), -a) / a;
         if (z[i] < 1e-16) { z[i] = 1e-16;

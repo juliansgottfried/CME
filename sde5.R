@@ -2,6 +2,7 @@ library(tidyverse)
 library(cmdstanr)
 library(posterior)
 library(bayesplot)
+library(R.utils)
 
 setwd("~/Desktop/CME")
 
@@ -71,79 +72,115 @@ create_dat <- function(cme) {
          R = all$R,
          kappa = kappa,
          P = sum(p),
-         f = c4pi,
+         f = pimeans[cme],
          stat = all |> group_by(aid) |> summarize(stat = sum(R > 0)) |> pull(stat),
-         s = all |> group_by(aid) |> summarize(n = n()) |> pull(n),
-         T0 = sum(all |> group_by(aid) |> summarize(stat = sum(R > 0)) |> pull(stat) == 0),
-         T1 = sum(all |> group_by(aid) |> summarize(stat = sum(R > 0)) |> pull(stat) == 1)
+         # T0 = sum(all |> group_by(aid) |> summarize(stat = sum(R > 0)) |> pull(stat) == 0),
+         # T1 = sum(all |> group_by(aid) |> summarize(stat = sum(R > 0)) |> pull(stat) == 1),
+         s = all |> group_by(aid) |> summarize(n = n()) |> pull(n)
          )
 }
 
 fit_R0 <- function(cme) {
-    cme <- "c4"
     print(which(cme == cmes))
-    dat <- create_dat(cme)
 
-    fit <- mod$sample(
-        data = dat[dat != "R"],
-        chains = 4,
-        iter_warmup = 1000,
-        iter_sampling = 1000,
-        parallel_chains = 4)
+    if (cme %in% str_remove(list.files("stanfits"), ".csv")) return(NA)
+    
+    dat <- create_dat(cme)
+    
+    tryCatch(
+        expr = {
+            withTimeout(
+                {
+                    fit <- mod$sample(
+                        data = dat[dat != "R"],
+                        chains = 4,
+                        iter_warmup = 1000,
+                        iter_sampling = 1000,
+                        parallel_chains = 4,
+                        init = list(
+                            list(scR0 = 1.75, leta = 1),
+                            list(scR0 = 1.25, leta = 1.5),
+                            list(scR0 = 0.75, leta = 2),
+                            list(scR0 = 0.25, leta = 2.5)))
+                    
+                    tryCatch(
+                        {
+                            write_csv(fit$draws(format = "df") |> select(scR0, leta), paste0("stanfits/", cme, ".csv"))
+                            write_csv(data.frame(fit$diagnostic_summary()), paste0("standiagnostics/", cme, ".csv"))
+                            }, error = function(msg){
+                            message("Chains failed.\n")
+                            return(NA)
+                        })
+                    }, 
+                timeout = 60)
+        }, 
+        TimeoutException = function(ex) cat("Timeout. Skipping.\n")
+    )
+    
+    # fit <- mod$sample(
+    #     data = dat[dat != "R"],
+    #     chains = 4,
+    #     iter_warmup = 1000,
+    #     iter_sampling = 1000,
+    #     parallel_chains = 4,
+    #     init = list(
+    #         list(scR0 = 1.75, leta = 1),
+    #         list(scR0 = 1.25, leta = 1.5),
+    #         list(scR0 = 0.75, leta = 2),
+    #         list(scR0 = 0.25, leta = 2.5)))
         # init = list(
-        #     list(scR0 = 0.5, leta = 0.5),
-        #     list(scR0 = 1, leta = 1),
-        #     list(scR0 = 1.5, leta = 1.5),
-        #     list(scR0 = 1.75, leta = 2)))
+        #     list(scR0 = 0.25, leta = 1),
+        #     list(scR0 = 0.75, leta = 1.5),
+        #     list(scR0 = 1.25, leta = 2),
+        #     list(scR0 = 1.75, leta = 2.5)))
         # fixed_param = T)
     
-    mcmc_trace(fit$draws(format = "df", variables = "scR0")) + theme_classic()
-    mcmc_trace(fit$draws(format = "df", variables = "leta")) + theme_classic()
-
-    GGally::ggpairs(fit$draws(format = "df") |> select(scR0, leta))
+    # mcmc_trace(fit$draws(format = "df", variables = "scR0")) + theme_classic()
+    # mcmc_trace(fit$draws(format = "df", variables = "leta")) + theme_classic()
+    # 
+    # GGally::ggpairs(fit$draws(format = "df") |> select(scR0, leta))
+    # 
+    # realtab <- data.frame(R = dat$R, aid = dat$aid) |>
+    #     group_by(aid) |> summarize(X = sum(R > 0)) |>
+    #     mutate(X = factor(X, levels = 0:22)) |>
+    #     pull(X) |> table()
+    # realdf <- data.frame(name = 0:22, m = as.numeric(realtab / sum(realtab))) |>
+    #     mutate(u = m, l = m, class = "data")
+    # 
+    # statsimtab <- fit$draws(format = "df") |>
+    #     select(starts_with("stat_sim[")) |>
+    #     apply(1, \(x) {
+    #         tab <- table(factor(x, levels = 0:22))
+    #         tab / sum(tab)
+    #         }) |> t() |> data.frame()
+    # 
+    # statsimtab |>
+    #     pivot_longer(everything()) |>
+    #     mutate(name = as.numeric(str_remove(name, "X"))) |>
+    #     group_by(name) |>
+    #     summarize(m = mean(value),
+    #               u = quantile(value, 0.975),
+    #               l = quantile(value, 0.025)) |>
+    #     mutate(class = "fit") |>
+    #     rbind(realdf) |>
+    #     ggplot(aes(x = name, y = m, color = class, shape = class)) +
+    #     geom_linerange(aes(ymin = l, ymax = u)) +
+    #     geom_point() +
+    #     scale_color_manual(values = c("#36cfe3", "black"), name = "") +
+    #     scale_shape_manual(values = c(19, 3), name = "") +
+    #     labs(x = "# infected bins", y = "frequency") +
+    #     ggtitle("c4") +
+    #     theme_classic() +
+    #     theme(text = element_text(size = 12, family = "mono"),
+    #           axis.title.y = element_text(angle = 0, vjust = 0.5))
     
-    realtab <- data.frame(R = dat$R, aid = dat$aid) |> 
-        group_by(aid) |> summarize(X = sum(R > 0)) |>
-        mutate(X = factor(X, levels = 0:22)) |> 
-        pull(X) |> table()
-    realdf <- data.frame(name = 0:22, m = as.numeric(realtab / sum(realtab))) |> 
-        mutate(u = m, l = m, class = "data")
-    
-    statsimtab <- fit$draws(format = "df") |> 
-        select(starts_with("stat_sim[")) |>
-        apply(1, \(x) {
-            tab <- table(factor(x, levels = 0:22))
-            tab / sum(tab)
-            }) |> t() |> data.frame()
-    
-    statsimtab |> 
-        pivot_longer(everything()) |> 
-        mutate(name = as.numeric(str_remove(name, "X"))) |>
-        group_by(name) |> 
-        summarize(m = mean(value),
-                  u = quantile(value, 0.975),
-                  l = quantile(value, 0.025)) |> 
-        mutate(class = "fit") |> 
-        rbind(realdf) |>
-        ggplot(aes(x = name, y = m, color = class, shape = class)) +
-        geom_linerange(aes(ymin = l, ymax = u)) +
-        geom_point() +
-        scale_color_manual(values = c("#36cfe3", "black"), name = "") +
-        scale_shape_manual(values = c(19, 3), name = "") +
-        labs(x = "# infected bins", y = "frequency") +
-        ggtitle("c4") +
-        theme_classic() +
-        theme(text = element_text(size = 12, family = "mono"),
-              axis.title.y = element_text(angle = 0, vjust = 0.5))
-    
-    fit$draws(format = "df") |> pull(scR0) |> mean()
+    # write_csv(fit$draws(format = "df") |> select(scR0, leta), paste0("stanfits/", cme, ".csv"))
+    # write_csv(data.frame(fit$diagnostic_summary()), paste0("standiagnostics/", cme, ".csv"))
 }
 
 mod <- cmdstan_model("mvnstar.stan")
 
-ret <- data.frame(sapply("c4", fit_R0))
-write_csv(ret, "ret.csv")
-ret <- read_csv("ret.csv")
+sapply(cmes, fit_R0)
 
 # sims
 R0range <- 1:1

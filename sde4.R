@@ -619,8 +619,9 @@ mod <- cmdstan_model("pi.stan")
 ret <- data.frame(sapply(cmes, fit_pi))
 write_csv(ret, "pifit.csv")
 
-ret <- read_csv("pifit.csv")
-c4pi <- mean(ret$c4)
+piret <- read_csv("pifit.csv")
+pimeans <- colMeans(piret)
+c4pi <- pimeans["c4"]
 
 data.frame(pi <- colMeans(ret)) |> 
     ggplot(aes(x = pi)) +
