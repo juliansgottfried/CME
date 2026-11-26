@@ -1,5 +1,6 @@
-runner <- function(scR0, P) {
-    eta <- 10 ^ 5
+runner <- function(scR0, leta) {
+    P = dat$P
+    eta <- 10 ^ leta
     R0 <- scR0 * eta
     
     AXY <- matrix(0, nrow = 3, ncol = 3)
@@ -105,11 +106,11 @@ runner <- function(scR0, P) {
     # thetac <- 1 - exp(dat$phi * (log(dat$phi) - log(dat$mu * z + dat$phi)))
 
     thetal <- dat$phi * (log(dat$phi) - log(dat$mu * z + dat$phi))
-    
+
     ret <- rep(0, dat$naid)
     # ret2 <- rep(0, dat$naid)
     # ret3 <- rep(0, dat$naid)
-    # pos = 1
+    pos = 1
     
     for (i in 1:dat$naid) {
         # hold <- poisbinom::rpoisbinom(10000, thetac[pos:(pos + dat$s[i] - 1)])
@@ -137,55 +138,69 @@ for (i in 1:length(allfiles)) {
     print(i)
     if (sum(read_csv(allfiles[i])$num_divergent) == 0) {
         tmpdf <- read_csv(allfit[i])
+        tmpdf$lR0 <- log10(tmpdf$scR0 * 10 ^ tmpdf$leta)
         gather <- rbind(gather, 
-                        cbind(c(mean(tmpdf$scR0), var(tmpdf$scR0), 
-                                quantile(tmpdf$scR0, c(0.025, 0.5, 0.975))),
-              c(mean(tmpdf$leta), var(tmpdf$scR0), 
-                quantile(tmpdf$leta, c(0.025, 0.5, 0.975)))) |> 
-            data.frame() |> 
-            mutate(stat = c("mean", "var", "l", "m", "u"),
-                   idx = i))
+                        cbind(c(mean(tmpdf$lR0), var(tmpdf$lR0), 
+                                quantile(tmpdf$lR0, c(0.025, 0.5, 0.975))),
+                              c(mean(tmpdf$leta), var(tmpdf$leta), 
+                                quantile(tmpdf$leta, c(0.025, 0.5, 0.975)))) |> 
+                            data.frame() |> 
+                            mutate(stat = c("mean", "var", "l", "m", "u"),
+                                   idx = i))
     }
 }
-colnames(gather)[1:2] <- c("scR0", "leta")
+colnames(gather)[1:2] <- c("lR0", "leta")
 gather$cme <- str_remove(str_remove(allfit, "stanfits/"), ".csv")[gather$idx]
 pimeansdf <- data.frame(pimeans)
 pimeansdf$cme <- names(pimeans)
 
 plotgather <- gather |> 
-    pivot_wider(id_cols = cme, names_from = stat, values_from = scR0) |> 
-    # filter(sqrt(var) / mean < 0.5) |> 
+    pivot_longer(c(lR0, leta)) |> 
+    pivot_wider(id_cols = c(cme, name), names_from = stat, values_from = value) |> 
     left_join(pimeansdf, by = "cme") |> 
-    select(cme, pimeans, mean, var, l, m, u) |> 
-    filter(sqrt(var) / mean < 0.15)
+    group_by(cme) |> 
+    mutate(keep = sum(sqrt(var) / mean < 0.1)) |> 
+    ungroup() |> filter(keep == 2) |> select(-keep) |> 
+    pivot_wider(id_cols = cme, values_from = mean:pimeans, names_from = name)
 
-scR0s <- exp(seq(from = log(min(plotgather$l)) - 0.1, to = -(log(min(plotgather$pimeans)) - 0.1), length.out = 40))
-fs <-  exp(seq(from = log(min(plotgather$pimeans)) - 0.1, to = -(log(min(plotgather$l)) - 0.1), length.out = 40))
-grid <- expand.grid(scR0s, fs)
+scR0s <- exp(seq(from = log(min(plotgather$l_scR0)) - 0.1, to = log(max(plotgather$u_scR0)) + 0.1, length.out = 40))
+letas <- exp(seq(from = log(min(plotgather$l_leta)) - 0.1, to = log(max(plotgather$u_leta)) + 0.1, length.out = 40))
+scR0s <- (seq(from = (min(plotgather$l_scR0)) - 0.1, to = (max(plotgather$u_scR0)) + 0.1, length.out = 40))
+letas <- (seq(from = (min(plotgather$l_leta)) - 0.1, to = (max(plotgather$u_leta)) + 0.1, length.out = 40))
+grid <- expand.grid(scR0s, letas)
 # ret <- cbind(grid, t(apply(grid, 1, \(x) runner(x[1], x[2]))))
 ret <- cbind(grid, apply(grid, 1, \(x) runner(x[1], x[2])))
 # colnames(ret) <- c("scR0", "f", "p0", "p1", "p2", "z")
-colnames(ret) <- c("scR0", "f", "theta")
+colnames(ret) <- c("scR0", "leta", "theta")
 
 ret |> 
-    ggplot(aes(x = log(f), y = log(scR0), fill = BayesRTMB::log1m_exp(theta))) +
-    geom_tile() +
-    geom_abline(slope = -1, color = "black",
-                linetype = 3, linewidth = 0.5) +
+    ggplot(aes(x = leta, y = lR0, fill = BayesRTMB::log1m_exp(theta))) +
+    # geom_tile() +
+    # geom_abline(slope = -1, color = "black",
+    #             linetype = 3, linewidth = 0.5) +
     geom_pointrange(data = plotgather,
-               aes(x = log(pimeans), y = log(m), ymin = log(l), ymax = log(u),
+               aes(x = (m_leta), 
+                   xmin = (l_leta), xmax = (u_leta),
+                   y = (m_lR0), 
                    color = cme != "c4"),
                fill = "white", 
                alpha = 0.6, shape = 10, stroke = 0.8, linewidth = 0.15) +
+    geom_pointrange(data = plotgather,
+                    aes(x = (m_leta), 
+                        y = (m_lR0), 
+                        ymin = (l_lR0), ymax = (u_lR0),
+                        color = cme != "c4"),
+                    fill = "white", 
+                    alpha = 0.6, shape = 10, stroke = 0.8, linewidth = 0.15) +
     scale_color_manual(values = c("red", "#35adbd"),
                        labels = c("c4", "other"),
                        name = "cme") +
-    scale_fill_gradient(low = "white", high = "black", name = "log prob\ninfection") +
+    scale_fill_gradient(low = "black", high = "white", name = "log prob\ninfection") +
     guides(fill = guide_colorbar(order = 1), 
            color = guide_legend(order = 2)) +
-    labs(x = bquote("log"~pi), y = bquote("log"~R[0]/eta)) +
+    labs(x = bquote(log[10]~eta), y = bquote(log[10]~R[0])) +
     theme_classic() +
-    coord_fixed(ratio = diff(range(log(fs))) / diff(range(log(scR0s)))) +
+    coord_fixed(ratio = diff(range(log(letas))) / diff(range(log(scR0s)))) +
     theme(text = element_text(size = 12, family = "mono"),
            axis.title.y = element_text(angle = 0, vjust = 0.5))
 
@@ -246,3 +261,15 @@ juliasim |>
     ggplot(aes(x = R0, y = plot)) +
     geom_line() +
     theme_classic()
+
+fittedcmes <- unique(plotgather$cme)
+testcme <- which(fittedcmes == "c55")
+dat <- create_dat(fittedcmes[testcme])
+realtab <- data.frame(R = dat$R, aid = dat$aid) |>
+    group_by(aid) |> summarize(X = sum(R > 0)) |>
+    mutate(X = factor(X, levels = 0:22)) |>
+    pull(X) |> table()
+plot(realtab / sum(realtab))
+
+checkfit <- as.numeric(gather |> filter(cme == fittedcmes[testcme], stat == "mean") |> select(scR0, leta))
+runner(checkfit[1], checkfit[2], dat$P)
