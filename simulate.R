@@ -173,6 +173,11 @@ ret <- cbind(grid, apply(grid, 1, \(x) runner(x[1], x[2])))
 # colnames(ret) <- c("scR0", "f", "p0", "p1", "p2", "z")
 colnames(ret) <- c("scR0", "leta", "theta")
 
+Ps <- sapply(unique(plotgather$cme), \(x) create_dat(x)$P)
+Psdf <- data.frame(P = Ps, cme = names(Ps))
+plotgather <- plotgather |> left_join(Psdf, by = "cme") |> 
+    mutate(dist = 1 / P - exp(m_lR0 - m_leta))
+
 ret |> 
     ggplot(aes(x = leta, y = lR0, fill = BayesRTMB::log1m_exp(theta))) +
     # geom_tile() +
@@ -182,22 +187,29 @@ ret |>
                aes(x = (m_leta), 
                    xmin = (l_leta), xmax = (u_leta),
                    y = (m_lR0), 
-                   color = cme != "c4"),
+                   color = cme != "c4",
+                   alpha = 1 / dist),
                fill = "white", 
-               alpha = 0.6, shape = 10, stroke = 0.8, linewidth = 0.15) +
+               # alpha = 0.5, 
+               shape = 10, stroke = 0.6, linewidth = 0.15) +
     geom_pointrange(data = plotgather,
                     aes(x = (m_leta), 
                         y = (m_lR0), 
                         ymin = (l_lR0), ymax = (u_lR0),
-                        color = cme != "c4"),
+                        color = cme != "c4",
+                        alpha = 1 / dist),
                     fill = "white", 
-                    alpha = 0.6, shape = 10, stroke = 0.8, linewidth = 0.15) +
-    scale_color_manual(values = c("red", "#35adbd"),
+                    # alpha = 0.5, 
+                    shape = 10, stroke = 0.6, linewidth = 0.15) +
+    scale_color_manual(values = c("red", "black"),
+                       # values = c("red", "#35adbd"),
                        labels = c("c4", "other"),
                        name = "cme") +
     scale_fill_gradient(low = "black", high = "white", name = "log prob\ninfection") +
+    scale_alpha_continuous(range = c(0.2, 1)) +
     guides(fill = guide_colorbar(order = 1), 
-           color = guide_legend(order = 2)) +
+           color = guide_legend(order = 2),
+           alpha = "none") +
     labs(x = bquote(log[10]~eta), y = bquote(log[10]~R[0])) +
     theme_classic() +
     coord_fixed(ratio = diff(range(log(letas))) / diff(range(log(scR0s)))) +
